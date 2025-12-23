@@ -1,0 +1,120 @@
+# =============================================================================
+# Aurora PostgreSQL Advanced Example - Configuration
+# =============================================================================
+# Copy this file to terraform.tfvars and customize the values
+# cp terraform.tfvars.example terraform.tfvars
+# =============================================================================
+
+# AWS Region
+aws_region = "us-east-1"
+
+# Naming
+account_name = "prod"
+project_name = "postgresql-demo"
+
+# Network Configuration (REQUIRED - update with your values)
+vpc_id                 = "vpc-xxxxx"                    # Your VPC ID
+database_subnet_ids    = ["subnet-xxxxx", "subnet-yyyyy"] # At least 2 subnets in different AZs
+vpc_security_group_ids = ["sg-xxxxx"]                   # Security group allowing PostgreSQL (5432)
+
+# Database Configuration
+db_username    = "postgres"
+engine_version = "15.4" # PostgreSQL 15.4
+instance_class = "db.r6g.large"
+database_name  = "postgres_advanced_db"
+
+# =============================================================================
+# BACKUP CONFIGURATION
+# =============================================================================
+
+backup_retention_period      = 14             # 14 days retention
+preferred_backup_window      = "03:00-04:00"  # 3-4 AM UTC
+preferred_maintenance_window = "sun:04:00-sun:05:00" # Sunday 4-5 AM UTC
+
+# =============================================================================
+# POSTGRESQL EXTENSIONS
+# =============================================================================
+
+# Enable pgvector for vector similarity search (AI/ML embeddings)
+enable_pgvector = true
+
+# Enable PostGIS for geographic data and spatial queries
+enable_postgis = true
+
+# Additional extensions can be enabled after deployment via SQL:
+# - pg_stat_statements (already in shared_preload_libraries)
+# - pgaudit (already in shared_preload_libraries)
+# - auto_explain (already in shared_preload_libraries)
+# - hstore, pg_trgm, uuid-ossp, pgcrypto, etc.
+
+# =============================================================================
+# PERFORMANCE INSIGHTS
+# =============================================================================
+
+performance_insights_retention_period = 7 # 7 days (standard) or 731 days (long-term)
+
+# =============================================================================
+# DELETION PROTECTION
+# =============================================================================
+
+deletion_protection = false # Set to true for production
+
+# Tags
+tags = {
+  Environment = "Production"
+  ManagedBy   = "Terraform"
+  Example     = "AuroraPostgreSQLAdvanced"
+  Purpose     = "PostgreSQL Advanced Features Demo"
+  Owner       = "Database Team"
+  CostCenter  = "Engineering"
+}
+
+# =============================================================================
+# IMPORTANT NOTES:
+# =============================================================================
+#
+# 1. POSTGRESQL EXTENSIONS:
+#    - pg_stat_statements: Query performance tracking (preloaded)
+#    - pgaudit: Audit logging for compliance (preloaded)
+#    - auto_explain: Automatic EXPLAIN for slow queries (preloaded)
+#    - pgvector: Vector similarity search for AI/ML embeddings
+#    - PostGIS: Geographic data and spatial queries
+#    - Additional extensions: hstore, pg_trgm, uuid-ossp, pgcrypto
+#
+# 2. LOGICAL REPLICATION:
+#    - Enabled via rds_logical_replication = 1
+#    - Useful for CDC (Change Data Capture), event sourcing
+#    - Create publications and subscriptions after deployment
+#    - Requires PostgreSQL 10+
+#
+# 3. PERFORMANCE TUNING:
+#    - shared_buffers: 25% of instance memory (auto-calculated)
+#    - effective_cache_size: 50% of instance memory (hint for planner)
+#    - work_mem: 16 MB per operation (sorts, hashes)
+#    - maintenance_work_mem: 512 MB (VACUUM, CREATE INDEX)
+#    - random_page_cost: 1.1 (optimized for SSD)
+#
+# 4. MONITORING AND LOGGING:
+#    - log_min_duration_statement: Log queries > 1 second
+#    - auto_explain: Explain queries > 1 second
+#    - Enhanced Monitoring: 60-second granularity
+#    - Performance Insights: Query-level performance data
+#
+# 5. INSTANCE COUNT:
+#    - This example creates 1 writer + 2 readers
+#    - Adjust in main.tf if you need more/fewer instances
+#    - Reader endpoints load-balance across readers
+#
+# 6. PGVECTOR USE CASES:
+#    - Semantic search with embeddings
+#    - Similarity search for recommendations
+#    - AI/ML applications with vector data
+#    - Requires PostgreSQL 11+ with pgvector extension
+#
+# 7. POSTGIS USE CASES:
+#    - Location-based services
+#    - Geospatial analysis
+#    - Distance calculations
+#    - Map applications
+#
+# =============================================================================

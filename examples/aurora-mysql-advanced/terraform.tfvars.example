@@ -1,0 +1,113 @@
+# =============================================================================
+# Aurora MySQL Advanced Example - Configuration
+# =============================================================================
+# Copy this file to terraform.tfvars and customize the values
+# cp terraform.tfvars.example terraform.tfvars
+# =============================================================================
+
+# AWS Region
+aws_region = "us-east-1"
+
+# Naming
+account_name = "prod"
+project_name = "mysql-demo"
+
+# Network Configuration (REQUIRED - update with your values)
+vpc_id                 = "vpc-xxxxx"                    # Your VPC ID
+database_subnet_ids    = ["subnet-xxxxx", "subnet-yyyyy"] # At least 2 subnets in different AZs
+vpc_security_group_ids = ["sg-xxxxx"]                   # Security group allowing MySQL (3306)
+
+# Database Configuration
+db_username    = "admin"
+engine_version = "8.0.mysql_aurora.3.05.2" # Aurora MySQL 3.05.2 (MySQL 8.0 compatible)
+instance_class = "db.r6g.large"
+database_name  = "mysql_advanced_db"
+
+# =============================================================================
+# BACKUP CONFIGURATION
+# =============================================================================
+
+backup_retention_period      = 14             # 14 days retention
+preferred_backup_window      = "03:00-04:00"  # 3-4 AM UTC
+preferred_maintenance_window = "sun:04:00-sun:05:00" # Sunday 4-5 AM UTC
+
+# =============================================================================
+# BACKTRACK CONFIGURATION (MySQL-specific)
+# =============================================================================
+# Backtrack allows you to rewind your database to a previous point in time
+# without restoring from a backup. Maximum 72 hours (259200 seconds).
+
+backtrack_window = 86400 # 24 hours (in seconds)
+# backtrack_window = 259200 # 72 hours (maximum)
+# backtrack_window = 0      # Disable backtrack
+
+# =============================================================================
+# BINARY LOG CONFIGURATION
+# =============================================================================
+# Binary log format affects replication and data recovery
+
+binlog_format = "ROW" # ROW (recommended), STATEMENT, or MIXED
+
+# ROW: Logs the actual row changes (safest, recommended)
+# STATEMENT: Logs the SQL statements (more compact, less safe)
+# MIXED: Combination of ROW and STATEMENT (automatic switching)
+
+# =============================================================================
+# PERFORMANCE INSIGHTS
+# =============================================================================
+
+performance_insights_retention_period = 7 # 7 days (standard) or 731 days (long-term)
+
+# =============================================================================
+# DELETION PROTECTION
+# =============================================================================
+
+deletion_protection = false # Set to true for production
+
+# Tags
+tags = {
+  Environment = "Production"
+  ManagedBy   = "Terraform"
+  Example     = "AuroraMySQLAdvanced"
+  Purpose     = "MySQL Advanced Features Demo"
+  Owner       = "Database Team"
+  CostCenter  = "Engineering"
+}
+
+# =============================================================================
+# IMPORTANT NOTES:
+# =============================================================================
+#
+# 1. BACKTRACK:
+#    - Only available for Aurora MySQL (not PostgreSQL)
+#    - Must be enabled at cluster creation (cannot be enabled later)
+#    - Causes brief DB instance restart when used
+#    - Useful for recovering from user errors (e.g., accidental DELETE)
+#    - Does not replace regular backups
+#
+# 2. ENGINE VERSION:
+#    - Aurora MySQL 3.x is compatible with MySQL 8.0
+#    - Aurora MySQL 2.x is compatible with MySQL 5.7
+#    - Check AWS docs for latest available versions
+#
+# 3. BINARY LOG FORMAT:
+#    - ROW format is recommended for most use cases
+#    - Required for certain MySQL features (e.g., multi-threaded replication)
+#    - STATEMENT format is more compact but less reliable
+#
+# 4. CLOUDWATCH LOGS:
+#    - audit: Security and compliance auditing
+#    - error: Error messages and warnings
+#    - general: All queries (can be very verbose)
+#    - slowquery: Queries exceeding long_query_time threshold
+#
+# 5. INSTANCE COUNT:
+#    - This example creates 1 writer + 2 readers
+#    - Adjust in main.tf if you need more/fewer instances
+#
+# 6. PARAMETER GROUPS:
+#    - Cluster parameters: Apply to entire cluster
+#    - Instance parameters: Apply to individual instances
+#    - Some parameters require reboot (apply_method = "pending-reboot")
+#
+# =============================================================================

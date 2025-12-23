@@ -1,0 +1,102 @@
+# =============================================================================
+# Aurora Advanced Autoscaling Example - Configuration
+# =============================================================================
+# Copy this file to terraform.tfvars and customize the values
+# cp terraform.tfvars.example terraform.tfvars
+# =============================================================================
+
+# AWS Region
+aws_region = "us-east-1"
+
+# Naming
+account_name = "prod"
+project_name = "autoscaling-demo"
+
+# Network Configuration (REQUIRED - update with your values)
+vpc_id                 = "vpc-xxxxx"                    # Your VPC ID
+database_subnet_ids    = ["subnet-xxxxx", "subnet-yyyyy"] # At least 2 subnets in different AZs
+vpc_security_group_ids = ["sg-xxxxx"]                   # Security group allowing PostgreSQL (5432)
+
+# Database Configuration
+db_username    = "dbadmin"
+engine_version = "15.4"
+instance_class = "db.r6g.large"
+database_name  = "autoscaling_db"
+
+# =============================================================================
+# AUTOSCALING CONFIGURATION
+# =============================================================================
+
+# Base Capacity Limits (applies when no scheduled action is active)
+min_capacity = 1  # Minimum number of read replicas
+max_capacity = 5  # Maximum number of read replicas
+
+# Target Tracking Configuration
+cpu_target_value         = 70  # Target CPU utilization percentage
+connections_target_value = 500 # Target number of database connections
+
+# Cooldown Periods (in seconds)
+scale_in_cooldown  = 300 # 5 minutes - conservative scale-in
+scale_out_cooldown = 60  # 1 minute - fast scale-out
+
+# =============================================================================
+# SCHEDULED AUTOSCALING (Business Hours)
+# =============================================================================
+
+# Business Hours Schedule (Mon-Fri)
+business_hours_start = "cron(0 8 ? * MON-FRI *)"  # 8 AM UTC Mon-Fri
+business_hours_end   = "cron(0 18 ? * MON-FRI *)" # 6 PM UTC Mon-Fri
+
+# Business Hours Capacity
+business_hours_min_capacity = 3  # Higher minimum during business hours
+business_hours_max_capacity = 10 # Allow more scale-out during peak
+
+# Off-Hours Capacity
+off_hours_min_capacity = 1 # Scale down to minimum
+off_hours_max_capacity = 3 # Limit scale-out during off-hours
+
+# Tags
+tags = {
+  Environment = "Production"
+  ManagedBy   = "Terraform"
+  Example     = "AuroraAutoscaling"
+  Purpose     = "Advanced Autoscaling Demo"
+  CostCenter  = "Engineering"
+}
+
+# =============================================================================
+# CONFIGURATION NOTES:
+# =============================================================================
+#
+# 1. CAPACITY LIMITS:
+#    - min_capacity: Base minimum (always maintained)
+#    - max_capacity: Base maximum (never exceeded)
+#    - Scheduled actions override these temporarily
+#
+# 2. TARGET TRACKING:
+#    - Multiple policies work together (CPU + Connections)
+#    - Autoscaling scales out if ANY metric exceeds target
+#    - Autoscaling scales in only if ALL metrics are below target
+#
+# 3. COOLDOWN PERIODS:
+#    - scale_out_cooldown: Shorter (60s) for fast response
+#    - scale_in_cooldown: Longer (300s) to avoid flapping
+#    - Prevents rapid scaling oscillations
+#
+# 4. SCHEDULED ACTIONS:
+#    - Override min/max capacity at specific times
+#    - Useful for predictable workload patterns
+#    - Multiple schedules can overlap (last one wins)
+#    - Cron format: minute hour day month day-of-week year
+#
+# 5. STEP SCALING POLICIES:
+#    - Provide fine-grained control for extreme scenarios
+#    - Example: Scale aggressively when CPU > 90%
+#    - Work alongside target tracking
+#
+# 6. COST OPTIMIZATION:
+#    - Schedule lower capacity during off-hours
+#    - Use target tracking to respond to unpredictable load
+#    - Monitor CloudWatch metrics to tune targets
+#
+# =============================================================================

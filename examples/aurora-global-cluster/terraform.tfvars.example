@@ -1,0 +1,52 @@
+# =============================================================================
+# Aurora Global Cluster Example - Configuration
+# =============================================================================
+# Copy this file to terraform.tfvars and customize the values
+# cp terraform.tfvars.example terraform.tfvars
+# =============================================================================
+
+# Naming
+account_name = "prod"
+project_name = "global-demo"
+
+# Regions
+primary_region   = "us-east-1"
+secondary_region = "us-west-2"
+
+# Database Configuration
+engine_version = "15.4"           # Aurora PostgreSQL version
+database_name  = "globaldb"       # Database name
+db_username    = "dbadmin"        # Master username
+instance_class = "db.r6g.large"   # Instance class for all instances
+
+# Primary Region Network (REQUIRED - update with your values)
+primary_vpc_security_group_ids = ["sg-xxxxx"]                   # Security group in us-east-1
+primary_database_subnet_ids    = ["subnet-xxxxx", "subnet-yyyyy"] # Subnets in us-east-1 (different AZs)
+
+# Secondary Region Network (REQUIRED - update with your values)
+secondary_vpc_security_group_ids = ["sg-zzzzz"]                   # Security group in us-west-2
+secondary_database_subnet_ids    = ["subnet-aaaaa", "subnet-bbbbb"] # Subnets in us-west-2 (different AZs)
+
+# Deletion Protection
+deletion_protection = false # Set to true for production
+
+# Tags
+tags = {
+  Environment = "Production"
+  ManagedBy   = "Terraform"
+  Example     = "AuroraGlobalCluster"
+  Purpose     = "Multi-Region Disaster Recovery"
+  Owner       = "Database Team"
+}
+
+# =============================================================================
+# IMPORTANT NOTES:
+# =============================================================================
+# 1. You need VPCs in BOTH regions (us-east-1 and us-west-2)
+# 2. Each VPC needs at least 2 subnets in different Availability Zones
+# 3. Security groups must allow PostgreSQL traffic (port 5432)
+# 4. Global cluster replication is asynchronous (RPO ~1 second)
+# 5. Write forwarding allows secondary to forward writes to primary
+# 6. Master credentials are stored in Secrets Manager in PRIMARY region
+# 7. Failover can be initiated from either region
+# =============================================================================

@@ -1,0 +1,49 @@
+# =============================================================================
+# Aurora Limitless Database Example - Configuration
+# =============================================================================
+# Copy this file to terraform.tfvars and customize the values
+# cp terraform.tfvars.example terraform.tfvars
+# =============================================================================
+
+# AWS Region
+aws_region = "us-east-1"
+
+# Naming
+account_name = "dev"
+project_name = "limitless-demo"
+
+# Network Configuration (REQUIRED - update with your values)
+vpc_id                 = "vpc-xxxxx"                    # Your VPC ID
+database_subnet_ids    = ["subnet-xxxxx", "subnet-yyyyy"] # At least 2 subnets in different AZs
+vpc_security_group_ids = ["sg-xxxxx"]                   # Security group allowing PostgreSQL (5432)
+
+# Database Configuration
+db_username    = "limitless_admin"
+engine_version = "15.5" # PostgreSQL 15.5+ required for Limitless
+
+# Instance Configuration
+instance_class = "db.r6g.xlarge" # Minimum recommended for Limitless
+instance_count = 2               # Number of instances
+
+# Aurora Limitless Shard Group Configuration
+max_acu            = 1536 # Maximum ACU (768 to 3145728)
+min_acu            = 768  # Minimum ACU
+compute_redundancy = 2    # High availability (0, 1, or 2)
+
+# Tags
+tags = {
+  Environment = "Development"
+  ManagedBy   = "Terraform"
+  Example     = "AuroraLimitless"
+  Purpose     = "Horizontal Scaling Demo"
+}
+
+# =============================================================================
+# IMPORTANT NOTES:
+# =============================================================================
+# 1. Aurora Limitless requires PostgreSQL 15.5 or higher
+# 2. Minimum instance class: db.r6g.xlarge or equivalent
+# 3. ACU range: 768 (0.75 TB) to 3145728 (3072 TB)
+# 4. compute_redundancy = 2 is recommended for production (high availability)
+# 5. Limitless is designed for workloads requiring horizontal scalability
+# =============================================================================
