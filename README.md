@@ -119,6 +119,19 @@ module "rds" {
 }
 ```
 
+> **Custom naming**: By default, instance identifiers follow the convention `{region_prefix}-rds-{account}-{project}-{key}`. To override this, set the optional `identifier` field:
+>
+> ```hcl
+> instances = {
+>   legacy = {
+>     identifier     = "my-custom-db-name"  # Overrides auto-generated name
+>     engine         = "postgres"
+>     instance_class = "db.r6g.large"
+>     # ...
+>   }
+> }
+> ```
+
 ### Aurora PostgreSQL Cluster
 
 ```hcl
@@ -404,9 +417,31 @@ Each cluster in the `clusters` map supports 90+ configuration options. Key attri
 
 See [1-variables.tf](./rds/1-variables.tf) for the complete list of 90+ variables.
 
+### Instance Configuration
+
+Each instance in the `instances` map supports the following key attributes:
+
+| Name                        | Description                                          | Type           | Default     |
+| --------------------------- | ---------------------------------------------------- | -------------- | ----------- |
+| identifier                  | Custom RDS identifier (overrides auto-generated name)| `string`       | `null`      |
+| engine                      | Database engine (postgres, mysql, mariadb, etc.)     | `string`       | required    |
+| engine_version              | Engine version                                       | `string`       | `null`      |
+| instance_class              | Instance class (db.r6g.large, db.t3.medium, etc.)   | `string`       | required    |
+| allocated_storage           | Allocated storage in GB                              | `number`       | `null`      |
+| max_allocated_storage       | Max storage for autoscaling                          | `number`       | `null`      |
+| storage_type                | Storage type (gp3, gp2, io1, io2)                   | `string`       | `"gp3"`     |
+| multi_az                    | Enable Multi-AZ deployment                           | `bool`         | `false`     |
+| manage_master_user_password | Use Secrets Manager for passwords                    | `bool`         | `true`      |
+| replicate_source_db         | Source for read replica (ARN or "self:key")          | `string`       | `null`      |
+| parameter_group             | Custom parameter group configuration                 | `object`       | `null`      |
+| option_group                | Option group configuration (RDS only, not Aurora)    | `object`       | `null`      |
+| deletion_protection         | Enable deletion protection                           | `bool`         | `true`      |
+| storage_encrypted           | Enable encryption                                    | `bool`         | `true`      |
+| performance_insights_enabled| Enable Performance Insights                          | `bool`         | `false`     |
+
 ## 📤 Outputs
 
-The module provides 53 outputs organized by resource type:
+The module provides 70 outputs organized by resource type:
 
 ### Cluster Outputs
 
