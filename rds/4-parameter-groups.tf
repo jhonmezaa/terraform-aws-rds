@@ -5,7 +5,7 @@
 resource "aws_rds_cluster_parameter_group" "this" {
   for_each = var.create ? local.cluster_parameter_groups : {}
 
-  name        = coalesce(each.value.name, "${local.region_prefix}-cluster-pg-${var.account_name}-${var.project_name}-${each.key}")
+  name        = coalesce(each.value.name, "${local.name_prefix}cluster-pg-${var.account_name}-${var.project_name}-${each.key}")
   family      = each.value.family
   description = each.value.description
 
@@ -21,7 +21,7 @@ resource "aws_rds_cluster_parameter_group" "this" {
   tags = merge(
     var.tags_common,
     {
-      Name = coalesce(each.value.name, "${local.region_prefix}-cluster-pg-${var.account_name}-${var.project_name}-${each.key}")
+      Name = coalesce(each.value.name, "${local.name_prefix}cluster-pg-${var.account_name}-${var.project_name}-${each.key}")
     }
   )
 
@@ -37,7 +37,7 @@ resource "aws_rds_cluster_parameter_group" "this" {
 resource "aws_db_parameter_group" "this" {
   for_each = var.create ? local.db_parameter_groups : {}
 
-  name        = coalesce(each.value.name, "${local.region_prefix}-db-pg-${var.account_name}-${var.project_name}-${each.key}")
+  name        = coalesce(each.value.name, "${local.name_prefix}db-pg-${var.account_name}-${var.project_name}-${each.key}")
   family      = each.value.family
   description = each.value.description
 
@@ -53,7 +53,7 @@ resource "aws_db_parameter_group" "this" {
   tags = merge(
     var.tags_common,
     {
-      Name = coalesce(each.value.name, "${local.region_prefix}-db-pg-${var.account_name}-${var.project_name}-${each.key}")
+      Name = coalesce(each.value.name, "${local.name_prefix}db-pg-${var.account_name}-${var.project_name}-${each.key}")
     }
   )
 
@@ -69,7 +69,7 @@ resource "aws_db_parameter_group" "this" {
 resource "aws_db_parameter_group" "instances" {
   for_each = var.create ? local.instance_parameter_groups : {}
 
-  name        = coalesce(each.value.name, "${local.region_prefix}-db-pg-inst-${var.account_name}-${var.project_name}-${each.key}")
+  name        = coalesce(each.value.name, "${local.name_prefix}db-pg-inst-${var.account_name}-${var.project_name}-${each.key}")
   family      = each.value.family
   description = each.value.description
 
@@ -85,7 +85,7 @@ resource "aws_db_parameter_group" "instances" {
   tags = merge(
     var.tags_common,
     {
-      Name = coalesce(each.value.name, "${local.region_prefix}-db-pg-inst-${var.account_name}-${var.project_name}-${each.key}")
+      Name = coalesce(each.value.name, "${local.name_prefix}db-pg-inst-${var.account_name}-${var.project_name}-${each.key}")
     }
   )
 

@@ -24,6 +24,12 @@ variable "region_prefix" {
   default     = null
 }
 
+variable "use_region_prefix" {
+  description = "Whether to include the region prefix in resource names. When false, names omit the region prefix (e.g., 'rds-prod-myapp-primary' instead of 'ause1-rds-prod-myapp-primary')"
+  type        = bool
+  default     = true
+}
+
 variable "tags_common" {
   description = "Common tags to apply to all resources"
   type        = map(string)

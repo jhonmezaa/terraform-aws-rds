@@ -5,7 +5,7 @@
 resource "aws_iam_role" "rds_proxy" {
   for_each = var.create ? var.db_proxies : {}
 
-  name = "${local.region_prefix}-role-rds-proxy-${var.account_name}-${var.project_name}-${each.key}"
+  name = "${local.name_prefix}role-rds-proxy-${var.account_name}-${var.project_name}-${each.key}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -23,7 +23,7 @@ resource "aws_iam_role" "rds_proxy" {
   tags = merge(
     var.tags_common,
     {
-      Name = "${local.region_prefix}-role-rds-proxy-${var.account_name}-${var.project_name}-${each.key}"
+      Name = "${local.name_prefix}role-rds-proxy-${var.account_name}-${var.project_name}-${each.key}"
     }
   )
 }
@@ -32,7 +32,7 @@ resource "aws_iam_role" "rds_proxy" {
 resource "aws_iam_role_policy" "rds_proxy_secrets" {
   for_each = var.create ? var.db_proxies : {}
 
-  name = "${local.region_prefix}-policy-rds-proxy-secrets-${var.account_name}-${var.project_name}-${each.key}"
+  name = "${local.name_prefix}policy-rds-proxy-secrets-${var.account_name}-${var.project_name}-${each.key}"
   role = aws_iam_role.rds_proxy[each.key].id
 
   policy = jsonencode({
