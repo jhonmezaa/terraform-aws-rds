@@ -52,17 +52,72 @@ rds/
 ├── 0-versions.tf          # Provider versions
 ├── 1-variables.tf         # Input variables (90+ variables)
 ├── 2-cluster.tf           # Aurora clusters & global clusters
-├── 3-instances.tf         # Cluster instances
-├── 4-parameter-groups.tf  # Parameter groups
+├── 3-db-instances.tf      # Standard RDS instances, subnet groups, option groups
+├── 3-instances.tf         # Aurora cluster instances
+├── 4-parameter-groups.tf  # Parameter groups (cluster + instance)
 ├── 5-data.tf              # Data sources
 ├── 5-monitoring.tf        # CloudWatch & IAM for monitoring
 ├── 6-autoscaling.tf       # Advanced autoscaling policies
-├── 7-proxies.tf           # RDS Proxy configuration
+├── 7-proxies.tf           # RDS Proxy configuration (Aurora + RDS)
 ├── 8-locals.tf            # Local values & data processing
-└── 9-outputs.tf           # Outputs (53 outputs)
+└── 9-outputs.tf           # Outputs (70 outputs)
 ```
 
 ## 🚀 Quick Start
+
+### Standard RDS PostgreSQL
+
+```hcl
+module "rds" {
+  source = "./rds"
+
+  account_name = "prod"
+  project_name = "myapp"
+
+  instances = {
+    primary = {
+      engine         = "postgres"
+      engine_version = "16.4"
+      instance_class = "db.r6g.large"
+
+      allocated_storage     = 100
+      max_allocated_storage = 500
+      storage_type          = "gp3"
+
+      database_name               = "myapp_db"
+      master_username             = "dbadmin"
+      manage_master_user_password = true
+
+      vpc_security_group_ids = [aws_security_group.db.id]
+      subnet_ids             = module.vpc.database_subnets
+      create_subnet_group    = true
+      multi_az               = true
+
+      storage_encrypted   = true
+      deletion_protection = true
+
+      performance_insights_enabled = true
+      monitoring_interval          = 60
+      create_monitoring_role       = true
+    }
+
+    # Read replica (references primary above)
+    replica = {
+      engine              = "postgres"
+      engine_version      = "16.4"
+      instance_class      = "db.r6g.large"
+      replicate_source_db = "self:primary"
+      storage_type        = "gp3"
+
+      vpc_security_group_ids = [aws_security_group.db.id]
+
+      performance_insights_enabled = true
+      monitoring_interval          = 60
+      create_monitoring_role       = true
+    }
+  }
+}
+```
 
 ### Aurora PostgreSQL Cluster
 
@@ -290,13 +345,15 @@ module "aurora_with_proxy" {
 
 Complete, production-ready examples are available in the [examples](./examples) directory:
 
-| Example                                                               | Description               | Features                                             |
-| --------------------------------------------------------------------- | ------------------------- | ---------------------------------------------------- |
-| [aurora-limitless](./examples/aurora-limitless)                       | Aurora Limitless Database | Horizontal scaling, ACU-based, 768 ACU to 3 PB       |
-| [aurora-global-cluster](./examples/aurora-global-cluster)             | Multi-region DR           | Cross-region replication, write forwarding, failover |
-| [aurora-autoscaling-advanced](./examples/aurora-autoscaling-advanced) | Advanced Autoscaling      | Target tracking, step scaling, scheduled actions     |
-| [aurora-mysql-advanced](./examples/aurora-mysql-advanced)             | MySQL Features            | Backtrack, binary logs, audit logging                |
-| [aurora-postgresql-advanced](./examples/aurora-postgresql-advanced)   | PostgreSQL Features       | pgvector, PostGIS, logical replication, JSONB        |
+| Example                                                               | Description                | Features                                             |
+| --------------------------------------------------------------------- | -------------------------- | ---------------------------------------------------- |
+| [rds-postgresql](./examples/rds-postgresql)                           | Standard RDS PostgreSQL    | Multi-AZ, gp3 storage autoscaling, read replica      |
+| [rds-mysql](./examples/rds-mysql)                                     | Standard RDS MySQL         | Multi-AZ, option group, audit plugin, Blue/Green      |
+| [aurora-limitless](./examples/aurora-limitless)                       | Aurora Limitless Database  | Horizontal scaling, ACU-based, 768 ACU to 3 PB       |
+| [aurora-global-cluster](./examples/aurora-global-cluster)             | Multi-region DR            | Cross-region replication, write forwarding, failover  |
+| [aurora-autoscaling-advanced](./examples/aurora-autoscaling-advanced) | Advanced Autoscaling       | Target tracking, step scaling, scheduled actions      |
+| [aurora-mysql-advanced](./examples/aurora-mysql-advanced)             | MySQL Features             | Backtrack, binary logs, audit logging                 |
+| [aurora-postgresql-advanced](./examples/aurora-postgresql-advanced)   | PostgreSQL Features        | pgvector, PostGIS, logical replication, JSONB         |
 
 Each example includes:
 
@@ -313,13 +370,14 @@ Each example includes:
 
 ### Core Variables
 
-| Name            | Description                          | Type          | Required |
-| --------------- | ------------------------------------ | ------------- | -------- |
-| account_name    | Account name for resource naming     | `string`      | yes      |
-| project_name    | Project name for resource naming     | `string`      | yes      |
-| clusters        | Map of Aurora cluster configurations | `map(object)` | no       |
-| global_clusters | Map of global cluster configurations | `map(object)` | no       |
-| db_proxies      | Map of RDS Proxy configurations      | `map(object)` | no       |
+| Name            | Description                              | Type          | Required |
+| --------------- | ---------------------------------------- | ------------- | -------- |
+| account_name    | Account name for resource naming         | `string`      | yes      |
+| project_name    | Project name for resource naming         | `string`      | yes      |
+| clusters        | Map of Aurora cluster configurations     | `map(object)` | no       |
+| instances       | Map of standard RDS instance configs     | `map(object)` | no       |
+| global_clusters | Map of global cluster configurations     | `map(object)` | no       |
+| db_proxies      | Map of RDS Proxy configurations          | `map(object)` | no       |
 
 ### Cluster Configuration
 
@@ -372,13 +430,29 @@ The module provides 53 outputs organized by resource type:
 | global_cluster_resource_ids | Map of global cluster resource IDs |
 | global_cluster_members      | Map of global cluster members      |
 
-### Instance Outputs
+### Aurora Instance Outputs
 
 | Name                       | Description                 |
 | -------------------------- | --------------------------- |
 | cluster_instance_ids       | Map of instance identifiers |
 | cluster_instance_endpoints | Map of instance endpoints   |
 | cluster_instance_arns      | Map of instance ARNs        |
+
+### Standard RDS Instance Outputs
+
+| Name                              | Description                           |
+| --------------------------------- | ------------------------------------- |
+| db_instance_ids                   | Map of RDS instance identifiers       |
+| db_instance_arns                  | Map of RDS instance ARNs              |
+| db_instance_endpoints             | Map of RDS instance endpoints         |
+| db_instance_addresses             | Map of RDS instance addresses         |
+| db_instance_ports                 | Map of RDS instance ports             |
+| db_instance_resource_ids          | Map of RDS instance resource IDs      |
+| db_instance_status                | Map of RDS instance statuses          |
+| db_instance_master_user_secret_arns | Map of Secrets Manager ARNs (sensitive) |
+| db_instance_database_names        | Map of database names                 |
+| db_option_group_ids               | Map of option group identifiers       |
+| db_option_group_arns              | Map of option group ARNs              |
 
 ### Autoscaling Outputs
 
@@ -398,7 +472,7 @@ The module provides 53 outputs organized by resource type:
 | db_proxy_endpoints | Map of proxy endpoints   |
 | db_proxy_names     | Map of proxy names       |
 
-See [9-outputs.tf](./rds/9-outputs.tf) for the complete list of 53 outputs.
+See [9-outputs.tf](./rds/9-outputs.tf) for the complete list of 70 outputs.
 
 ## 🔒 Security Best Practices
 

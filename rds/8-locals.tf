@@ -224,14 +224,15 @@ locals {
   # RDS Proxy Configuration
   # =============================================================================
 
-  # RDS Proxy configurations with cluster references
+  # RDS Proxy configurations with cluster or instance references
   db_proxy_configs = {
     for proxy_key, proxy in var.db_proxies :
     proxy_key => merge(proxy, {
-      proxy_key         = proxy_key
-      db_proxy_name     = lower(replace("${local.region_prefix}-proxy-${var.account_name}-${var.project_name}-${proxy_key}", "_", "-"))
-      role_arn          = aws_iam_role.rds_proxy[proxy_key].arn
-      target_cluster_id = aws_rds_cluster.this[proxy.cluster_key].id
+      proxy_key     = proxy_key
+      cluster_key   = try(proxy.cluster_key, null)
+      instance_key  = try(proxy.instance_key, null)
+      db_proxy_name = lower(replace("${local.region_prefix}-proxy-${var.account_name}-${var.project_name}-${proxy_key}", "_", "-"))
+      role_arn      = aws_iam_role.rds_proxy[proxy_key].arn
     })
   }
 
@@ -279,6 +280,122 @@ locals {
       })
     }
   ]...)
+
+  # =============================================================================
+  # Standard RDS Instance - Default Ports
+  # =============================================================================
+
+  instance_default_ports = {
+    "postgres"      = 5432
+    "mysql"         = 3306
+    "mariadb"       = 3306
+    "oracle-ee"     = 1521
+    "oracle-se2"    = 1521
+    "sqlserver-ee"  = 1433
+    "sqlserver-se"  = 1433
+    "sqlserver-ex"  = 1433
+    "sqlserver-web" = 1433
+  }
+
+  # =============================================================================
+  # Standard RDS Instance - Enriched Configurations
+  # =============================================================================
+
+  db_instance_configs = {
+    for inst_key, inst in var.instances :
+    inst_key => merge(inst, {
+      instance_key        = inst_key
+      identifier          = "${local.region_prefix}-rds-${var.account_name}-${var.project_name}-${inst_key}"
+      port                = coalesce(inst.port, lookup(local.instance_default_ports, inst.engine, 5432))
+      is_read_replica     = inst.replicate_source_db != null
+      is_self_replica     = inst.replicate_source_db != null ? startswith(coalesce(inst.replicate_source_db, ""), "self:") : false
+      source_instance_key = inst.replicate_source_db != null && startswith(coalesce(inst.replicate_source_db, ""), "self:") ? trimprefix(inst.replicate_source_db, "self:") : null
+      final_snapshot_id = inst.skip_final_snapshot ? null : coalesce(
+        inst.final_snapshot_identifier,
+        "${local.region_prefix}-rds-${var.account_name}-${var.project_name}-${inst_key}-final-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
+      )
+      merged_tags = merge(
+        var.tags_common,
+        inst.tags,
+        {
+          Name = "${local.region_prefix}-rds-${var.account_name}-${var.project_name}-${inst_key}"
+        }
+      )
+    })
+  }
+
+  # Primary instances (not self-referencing replicas)
+  db_instance_primary_configs = {
+    for inst_key, config in local.db_instance_configs :
+    inst_key => config
+    if !config.is_self_replica
+  }
+
+  # Self-referencing read replicas (reference another instance in this module)
+  db_instance_replica_configs = {
+    for inst_key, config in local.db_instance_configs :
+    inst_key => config
+    if config.is_self_replica
+  }
+
+  # =============================================================================
+  # Standard RDS Instance - Subnet Groups
+  # =============================================================================
+
+  instance_subnet_groups_to_create = {
+    for inst_key, inst in var.instances :
+    inst_key => inst
+    if inst.create_subnet_group && length(inst.subnet_ids) > 0 && inst.replicate_source_db == null
+  }
+
+  # =============================================================================
+  # Standard RDS Instance - Parameter Groups
+  # =============================================================================
+
+  instance_parameter_groups = {
+    for inst_key, inst in var.instances :
+    inst_key => inst.parameter_group
+    if inst.parameter_group != null
+  }
+
+  # =============================================================================
+  # Standard RDS Instance - Option Groups
+  # =============================================================================
+
+  instance_option_groups = {
+    for inst_key, inst in var.instances :
+    inst_key => merge(inst.option_group, {
+      engine_name = coalesce(try(inst.option_group.engine_name, null), inst.engine)
+    })
+    if inst.option_group != null
+  }
+
+  # =============================================================================
+  # Standard RDS Instance - CloudWatch Log Groups
+  # =============================================================================
+
+  instance_cloudwatch_log_groups = merge([
+    for inst_key, inst in var.instances : {
+      for log_type in inst.enabled_cloudwatch_logs_exports :
+      "${inst_key}-${log_type}" => {
+        instance_key      = inst_key
+        log_type          = log_type
+        retention_in_days = inst.cloudwatch_log_group_retention_in_days
+        kms_key_id        = inst.cloudwatch_log_group_kms_key_id
+        name              = "/aws/rds/instance/${local.region_prefix}-rds-${var.account_name}-${var.project_name}-${inst_key}/${log_type}"
+      }
+    } if length(inst.enabled_cloudwatch_logs_exports) > 0
+  ]...)
+
+  # =============================================================================
+  # Standard RDS Instance - Monitoring Roles
+  # =============================================================================
+
+  instance_monitoring_roles_to_create = {
+    for inst_key, inst in var.instances :
+    inst_key => inst
+    if inst.create_monitoring_role && inst.monitoring_interval > 0 && inst.monitoring_role_arn == null
+  }
 
   # =============================================================================
   # CloudWatch Log Groups with Log Class
