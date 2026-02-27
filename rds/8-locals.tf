@@ -305,7 +305,7 @@ locals {
     for inst_key, inst in var.instances :
     inst_key => merge(inst, {
       instance_key        = inst_key
-      identifier          = "${local.region_prefix}-rds-${var.account_name}-${var.project_name}-${inst_key}"
+      identifier          = coalesce(inst.identifier, "${local.region_prefix}-rds-${var.account_name}-${var.project_name}-${inst_key}")
       port                = coalesce(inst.port, lookup(local.instance_default_ports, inst.engine, 5432))
       is_read_replica     = inst.replicate_source_db != null
       is_self_replica     = inst.replicate_source_db != null ? startswith(coalesce(inst.replicate_source_db, ""), "self:") : false
