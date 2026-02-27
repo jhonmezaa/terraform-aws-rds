@@ -20,6 +20,9 @@ locals {
     data.aws_region.current.id
   )
 
+  # Name prefix: includes region prefix with trailing dash, or empty string
+  name_prefix = var.use_region_prefix ? "${local.region_prefix}-" : ""
+
   # =============================================================================
   # Cluster Instances Mapping
   # =============================================================================
@@ -32,7 +35,7 @@ locals {
         cluster_key         = cluster_key
         instance_key        = instance_key
         cluster             = cluster
-        identifier          = coalesce(instance.identifier, "${local.region_prefix}-instance-${var.account_name}-${var.project_name}-${cluster_key}-${instance_key}")
+        identifier          = coalesce(instance.identifier, "${local.name_prefix}instance-${var.account_name}-${var.project_name}-${cluster_key}-${instance_key}")
         publicly_accessible = coalesce(instance.publicly_accessible, cluster.publicly_accessible)
 
         # Monitoring settings (instance overrides cluster)
@@ -86,7 +89,7 @@ locals {
         log_type          = log_type
         retention_in_days = cluster.cloudwatch_log_group_retention_in_days
         kms_key_id        = cluster.cloudwatch_log_group_kms_key_id
-        name              = "/aws/rds/cluster/${local.region_prefix}-cluster-${var.account_name}-${var.project_name}-${cluster_key}/${log_type}"
+        name              = "/aws/rds/cluster/${local.name_prefix}cluster-${var.account_name}-${var.project_name}-${cluster_key}/${log_type}"
       }
     } if length(cluster.enabled_cloudwatch_logs_exports) > 0
   ]...)
@@ -113,7 +116,7 @@ locals {
       "${cluster_key}-${endpoint_key}" => merge(endpoint, {
         cluster_key  = cluster_key
         endpoint_key = endpoint_key
-        identifier   = "${local.region_prefix}-endpoint-${var.account_name}-${var.project_name}-${cluster_key}-${endpoint_key}"
+        identifier   = "${local.name_prefix}endpoint-${var.account_name}-${var.project_name}-${cluster_key}-${endpoint_key}"
       })
     }
   ]...)
@@ -164,7 +167,7 @@ locals {
     for cluster_key, cluster in var.clusters :
     cluster_key => cluster.skip_final_snapshot ? null : coalesce(
       cluster.final_snapshot_identifier_prefix,
-      "${local.region_prefix}-cluster-${var.account_name}-${var.project_name}-${cluster_key}-final-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
+      "${local.name_prefix}cluster-${var.account_name}-${var.project_name}-${cluster_key}-final-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
     )
   }
 
@@ -199,7 +202,7 @@ locals {
       var.tags_common,
       cluster.tags,
       {
-        Name = "${local.region_prefix}-cluster-${var.account_name}-${var.project_name}-${cluster_key}"
+        Name = "${local.name_prefix}cluster-${var.account_name}-${var.project_name}-${cluster_key}"
       }
     )
   }
@@ -215,7 +218,7 @@ locals {
       var.tags_common,
       gc.tags,
       {
-        Name = "${local.region_prefix}-globalcluster-${var.account_name}-${var.project_name}-${gc_key}"
+        Name = "${local.name_prefix}globalcluster-${var.account_name}-${var.project_name}-${gc_key}"
       }
     )
   }
@@ -231,7 +234,7 @@ locals {
       proxy_key     = proxy_key
       cluster_key   = try(proxy.cluster_key, null)
       instance_key  = try(proxy.instance_key, null)
-      db_proxy_name = lower(replace("${local.region_prefix}-proxy-${var.account_name}-${var.project_name}-${proxy_key}", "_", "-"))
+      db_proxy_name = lower(replace("${local.name_prefix}proxy-${var.account_name}-${var.project_name}-${proxy_key}", "_", "-"))
       role_arn      = aws_iam_role.rds_proxy[proxy_key].arn
     })
   }
@@ -305,20 +308,20 @@ locals {
     for inst_key, inst in var.instances :
     inst_key => merge(inst, {
       instance_key        = inst_key
-      identifier          = coalesce(inst.identifier, "${local.region_prefix}-rds-${var.account_name}-${var.project_name}-${inst_key}")
+      identifier          = coalesce(inst.identifier, "${local.name_prefix}rds-${var.account_name}-${var.project_name}-${inst_key}")
       port                = coalesce(inst.port, lookup(local.instance_default_ports, inst.engine, 5432))
       is_read_replica     = inst.replicate_source_db != null
       is_self_replica     = inst.replicate_source_db != null ? startswith(coalesce(inst.replicate_source_db, ""), "self:") : false
       source_instance_key = inst.replicate_source_db != null && startswith(coalesce(inst.replicate_source_db, ""), "self:") ? trimprefix(inst.replicate_source_db, "self:") : null
       final_snapshot_id = inst.skip_final_snapshot ? null : coalesce(
         inst.final_snapshot_identifier,
-        "${local.region_prefix}-rds-${var.account_name}-${var.project_name}-${inst_key}-final-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
+        "${local.name_prefix}rds-${var.account_name}-${var.project_name}-${inst_key}-final-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
       )
       merged_tags = merge(
         var.tags_common,
         inst.tags,
         {
-          Name = "${local.region_prefix}-rds-${var.account_name}-${var.project_name}-${inst_key}"
+          Name = "${local.name_prefix}rds-${var.account_name}-${var.project_name}-${inst_key}"
         }
       )
     })
@@ -382,7 +385,7 @@ locals {
         log_type          = log_type
         retention_in_days = inst.cloudwatch_log_group_retention_in_days
         kms_key_id        = inst.cloudwatch_log_group_kms_key_id
-        name              = "/aws/rds/instance/${local.region_prefix}-rds-${var.account_name}-${var.project_name}-${inst_key}/${log_type}"
+        name              = "/aws/rds/instance/${local.name_prefix}rds-${var.account_name}-${var.project_name}-${inst_key}/${log_type}"
       }
     } if length(inst.enabled_cloudwatch_logs_exports) > 0
   ]...)
@@ -411,7 +414,7 @@ locals {
         retention_in_days = cluster.cloudwatch_log_group_retention_in_days
         kms_key_id        = cluster.cloudwatch_log_group_kms_key_id
         log_class         = cluster.cloudwatch_log_class
-        name              = "/aws/rds/cluster/${local.region_prefix}-cluster-${var.account_name}-${var.project_name}-${cluster_key}/${log_type}"
+        name              = "/aws/rds/cluster/${local.name_prefix}cluster-${var.account_name}-${var.project_name}-${cluster_key}/${log_type}"
       }
     } if length(cluster.enabled_cloudwatch_logs_exports) > 0
   ]...)

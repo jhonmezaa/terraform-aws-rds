@@ -119,12 +119,22 @@ module "rds" {
 }
 ```
 
-> **Custom naming**: By default, instance identifiers follow the convention `{region_prefix}-rds-{account}-{project}-{key}`. To override this, set the optional `identifier` field:
+> **Custom naming**: By default, identifiers follow the convention `{region_prefix}-rds-{account}-{project}-{key}`. You can customize this in two ways:
 >
+> 1. **Disable region prefix globally** with `use_region_prefix = false` (names become `rds-{account}-{project}-{key}`):
+> ```hcl
+> module "rds" {
+>   source            = "./rds"
+>   use_region_prefix = false  # No region prefix in any resource name
+>   # ...
+> }
+> ```
+>
+> 2. **Override a specific instance name** with the `identifier` field:
 > ```hcl
 > instances = {
 >   legacy = {
->     identifier     = "my-custom-db-name"  # Overrides auto-generated name
+>     identifier     = "my-custom-db-name"  # Fully custom name
 >     engine         = "postgres"
 >     instance_class = "db.r6g.large"
 >     # ...
@@ -383,14 +393,16 @@ Each example includes:
 
 ### Core Variables
 
-| Name            | Description                              | Type          | Required |
-| --------------- | ---------------------------------------- | ------------- | -------- |
-| account_name    | Account name for resource naming         | `string`      | yes      |
-| project_name    | Project name for resource naming         | `string`      | yes      |
-| clusters        | Map of Aurora cluster configurations     | `map(object)` | no       |
-| instances       | Map of standard RDS instance configs     | `map(object)` | no       |
-| global_clusters | Map of global cluster configurations     | `map(object)` | no       |
-| db_proxies      | Map of RDS Proxy configurations          | `map(object)` | no       |
+| Name              | Description                                      | Type          | Default |
+| ----------------- | ------------------------------------------------ | ------------- | ------- |
+| account_name      | Account name for resource naming                 | `string`      | required|
+| project_name      | Project name for resource naming                 | `string`      | required|
+| use_region_prefix | Include region prefix in resource names           | `bool`        | `true`  |
+| region_prefix     | Custom region prefix (auto-derived if null)       | `string`      | `null`  |
+| clusters          | Map of Aurora cluster configurations              | `map(object)` | `{}`    |
+| instances         | Map of standard RDS instance configs              | `map(object)` | `{}`    |
+| global_clusters   | Map of global cluster configurations              | `map(object)` | `{}`    |
+| db_proxies        | Map of RDS Proxy configurations                   | `map(object)` | `{}`    |
 
 ### Cluster Configuration
 

@@ -252,7 +252,7 @@ resource "aws_db_instance" "read_replica" {
 resource "aws_db_subnet_group" "instances" {
   for_each = var.create ? local.instance_subnet_groups_to_create : {}
 
-  name        = "${local.region_prefix}-subnet-group-${var.account_name}-${var.project_name}-${each.key}"
+  name        = "${local.name_prefix}subnet-group-${var.account_name}-${var.project_name}-${each.key}"
   description = "Subnet group for RDS instance ${each.key}"
   subnet_ids  = each.value.subnet_ids
 
@@ -260,7 +260,7 @@ resource "aws_db_subnet_group" "instances" {
     var.tags_common,
     each.value.tags,
     {
-      Name = "${local.region_prefix}-subnet-group-${var.account_name}-${var.project_name}-${each.key}"
+      Name = "${local.name_prefix}subnet-group-${var.account_name}-${var.project_name}-${each.key}"
     }
   )
 }
@@ -272,7 +272,7 @@ resource "aws_db_subnet_group" "instances" {
 resource "aws_db_option_group" "this" {
   for_each = var.create ? local.instance_option_groups : {}
 
-  name                     = coalesce(each.value.name, "${local.region_prefix}-option-group-${var.account_name}-${var.project_name}-${each.key}")
+  name                     = coalesce(each.value.name, "${local.name_prefix}option-group-${var.account_name}-${var.project_name}-${each.key}")
   engine_name              = each.value.engine_name
   major_engine_version     = each.value.major_engine_version
   option_group_description = each.value.description
@@ -299,7 +299,7 @@ resource "aws_db_option_group" "this" {
   tags = merge(
     var.tags_common,
     {
-      Name = coalesce(each.value.name, "${local.region_prefix}-option-group-${var.account_name}-${var.project_name}-${each.key}")
+      Name = coalesce(each.value.name, "${local.name_prefix}option-group-${var.account_name}-${var.project_name}-${each.key}")
     }
   )
 

@@ -29,7 +29,7 @@ resource "aws_cloudwatch_log_group" "this" {
 resource "aws_iam_role" "monitoring" {
   for_each = var.create ? local.monitoring_roles_to_create : {}
 
-  name = "${local.region_prefix}-role-rds-monitoring-${var.account_name}-${var.project_name}-${each.key}"
+  name = "${local.name_prefix}role-rds-monitoring-${var.account_name}-${var.project_name}-${each.key}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -47,7 +47,7 @@ resource "aws_iam_role" "monitoring" {
   tags = merge(
     var.tags_common,
     {
-      Name = "${local.region_prefix}-role-rds-monitoring-${var.account_name}-${var.project_name}-${each.key}"
+      Name = "${local.name_prefix}role-rds-monitoring-${var.account_name}-${var.project_name}-${each.key}"
     }
   )
 }
@@ -87,7 +87,7 @@ resource "aws_cloudwatch_log_group" "instances" {
 resource "aws_iam_role" "instance_monitoring" {
   for_each = var.create ? local.instance_monitoring_roles_to_create : {}
 
-  name = "${local.region_prefix}-role-rds-mon-inst-${var.account_name}-${var.project_name}-${each.key}"
+  name = "${local.name_prefix}role-rds-mon-inst-${var.account_name}-${var.project_name}-${each.key}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -105,7 +105,7 @@ resource "aws_iam_role" "instance_monitoring" {
   tags = merge(
     var.tags_common,
     {
-      Name = "${local.region_prefix}-role-rds-mon-inst-${var.account_name}-${var.project_name}-${each.key}"
+      Name = "${local.name_prefix}role-rds-mon-inst-${var.account_name}-${var.project_name}-${each.key}"
     }
   )
 }

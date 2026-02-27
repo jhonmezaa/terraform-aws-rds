@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Optional `identifier` field on `instances` variable to allow custom RDS instance names, overriding the auto-generated `{region_prefix}-rds-{account}-{project}-{key}` convention
+- `use_region_prefix` boolean variable (default: `true`) to control whether the region prefix is included in resource names. When `false`, names omit the prefix (e.g., `rds-prod-myapp-primary` instead of `ause1-rds-prod-myapp-primary`)
 
 ## [v3.0.0] - 2026-02-27
 

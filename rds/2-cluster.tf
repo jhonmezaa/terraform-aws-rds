@@ -5,7 +5,7 @@
 resource "aws_db_subnet_group" "this" {
   for_each = var.create ? local.subnet_groups_to_create : {}
 
-  name        = "${local.region_prefix}-subnet-group-${var.account_name}-${var.project_name}-${each.key}"
+  name        = "${local.name_prefix}subnet-group-${var.account_name}-${var.project_name}-${each.key}"
   description = "Subnet group for Aurora cluster ${each.key}"
   subnet_ids  = each.value.subnet_ids
 
@@ -13,7 +13,7 @@ resource "aws_db_subnet_group" "this" {
     var.tags_common,
     each.value.tags,
     {
-      Name = "${local.region_prefix}-subnet-group-${var.account_name}-${var.project_name}-${each.key}"
+      Name = "${local.name_prefix}subnet-group-${var.account_name}-${var.project_name}-${each.key}"
     }
   )
 }
@@ -50,7 +50,7 @@ resource "aws_rds_cluster" "this" {
   for_each = var.create ? var.clusters : {}
 
   cluster_identifier_prefix = each.value.cluster_identifier_prefix
-  cluster_identifier        = each.value.cluster_identifier_prefix == null ? "${local.region_prefix}-cluster-${var.account_name}-${var.project_name}-${each.key}" : null
+  cluster_identifier        = each.value.cluster_identifier_prefix == null ? "${local.name_prefix}cluster-${var.account_name}-${var.project_name}-${each.key}" : null
 
   # Engine Configuration
   engine                    = each.value.engine

@@ -15,7 +15,7 @@ resource "aws_appautoscaling_target" "this" {
     var.tags_common,
     local.cluster_tags[each.key],
     {
-      Name = "${local.region_prefix}-autoscaling-target-${var.account_name}-${var.project_name}-${each.key}"
+      Name = "${local.name_prefix}autoscaling-target-${var.account_name}-${var.project_name}-${each.key}"
     }
   )
 }
@@ -27,7 +27,7 @@ resource "aws_appautoscaling_target" "this" {
 resource "aws_appautoscaling_policy" "target_tracking" {
   for_each = var.create ? local.autoscaling_target_tracking_policies : {}
 
-  name               = "${local.region_prefix}-autoscaling-target-${var.account_name}-${var.project_name}-${each.value.cluster_key}-${each.value.policy_key}"
+  name               = "${local.name_prefix}autoscaling-target-${var.account_name}-${var.project_name}-${each.value.cluster_key}-${each.value.policy_key}"
   policy_type        = "TargetTrackingScaling"
   resource_id        = aws_appautoscaling_target.this[each.value.cluster_key].resource_id
   scalable_dimension = aws_appautoscaling_target.this[each.value.cluster_key].scalable_dimension
@@ -52,7 +52,7 @@ resource "aws_appautoscaling_policy" "target_tracking" {
 resource "aws_appautoscaling_policy" "step_scaling" {
   for_each = var.create ? local.autoscaling_step_scaling_policies : {}
 
-  name               = "${local.region_prefix}-autoscaling-step-${var.account_name}-${var.project_name}-${each.value.cluster_key}-${each.value.policy_key}"
+  name               = "${local.name_prefix}autoscaling-step-${var.account_name}-${var.project_name}-${each.value.cluster_key}-${each.value.policy_key}"
   policy_type        = "StepScaling"
   resource_id        = aws_appautoscaling_target.this[each.value.cluster_key].resource_id
   scalable_dimension = aws_appautoscaling_target.this[each.value.cluster_key].scalable_dimension
@@ -82,7 +82,7 @@ resource "aws_appautoscaling_policy" "step_scaling" {
 resource "aws_cloudwatch_metric_alarm" "step_scaling" {
   for_each = var.create ? local.autoscaling_step_scaling_policies : {}
 
-  alarm_name          = "${local.region_prefix}-alarm-autoscaling-${var.account_name}-${var.project_name}-${each.value.cluster_key}-${each.value.policy_key}"
+  alarm_name          = "${local.name_prefix}alarm-autoscaling-${var.account_name}-${var.project_name}-${each.value.cluster_key}-${each.value.policy_key}"
   comparison_operator = each.value.alarm.comparison_operator
   evaluation_periods  = each.value.alarm.evaluation_periods
   metric_name         = each.value.alarm.metric_name
@@ -103,7 +103,7 @@ resource "aws_cloudwatch_metric_alarm" "step_scaling" {
     var.tags_common,
     local.cluster_tags[each.value.cluster_key],
     {
-      Name    = "${local.region_prefix}-alarm-autoscaling-${var.account_name}-${var.project_name}-${each.value.cluster_key}-${each.value.policy_key}"
+      Name    = "${local.name_prefix}alarm-autoscaling-${var.account_name}-${var.project_name}-${each.value.cluster_key}-${each.value.policy_key}"
       Cluster = each.value.cluster_key
       Policy  = each.value.policy_key
     }
@@ -117,7 +117,7 @@ resource "aws_cloudwatch_metric_alarm" "step_scaling" {
 resource "aws_appautoscaling_scheduled_action" "this" {
   for_each = var.create ? local.autoscaling_scheduled_actions : {}
 
-  name               = "${local.region_prefix}-autoscaling-schedule-${var.account_name}-${var.project_name}-${each.value.cluster_key}-${each.value.action_key}"
+  name               = "${local.name_prefix}autoscaling-schedule-${var.account_name}-${var.project_name}-${each.value.cluster_key}-${each.value.action_key}"
   service_namespace  = aws_appautoscaling_target.this[each.value.cluster_key].service_namespace
   resource_id        = aws_appautoscaling_target.this[each.value.cluster_key].resource_id
   scalable_dimension = aws_appautoscaling_target.this[each.value.cluster_key].scalable_dimension
