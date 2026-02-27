@@ -104,7 +104,7 @@ variable "clusters" {
 
     # Deletion Protection
     deletion_protection = optional(bool, true)
-    apply_immediately   = optional(bool, true)
+    apply_immediately   = optional(bool, false)
 
     # Performance Insights
     performance_insights_enabled          = optional(bool, false)
