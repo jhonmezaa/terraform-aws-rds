@@ -409,6 +409,9 @@ variable "clusters" {
 variable "instances" {
   description = "Map of standard RDS instance configurations (non-Aurora). Use 'clusters' for Aurora."
   type = map(object({
+    # Identifier (custom name override)
+    identifier = optional(string) # Custom RDS identifier. If null, auto-generated as: {region_prefix}-rds-{account}-{project}-{key}
+
     # Engine Configuration
     engine         = string
     engine_version = optional(string)
