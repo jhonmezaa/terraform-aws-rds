@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-02-27
+
+### Changed
+
+#### Safety Default
+- Changed `apply_immediately` default from `true` to `false`
+- Changes now apply during the next maintenance window instead of immediately
+- Prevents unplanned downtime in production environments
+- Users can still override with `apply_immediately = true` per cluster
+
 ## [2.0.0] - 2025-12-20
 
 ### ⚠️ BREAKING CHANGES
