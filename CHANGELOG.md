@@ -1,5 +1,128 @@
 # Changelog
 
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [v3.0.0] - 2026-02-27
+
+### BREAKING CHANGES
+
+#### `db_proxies` variable modified
+- `cluster_key` changed from `string` (required) to `optional(string)` - existing configs that relied on implicit required-ness will still work, but the type signature changed
+- Added `instance_key = optional(string)` for targeting standard RDS instances
+- Added XOR validation: exactly one of `cluster_key` or `instance_key` must be provided
+
+**Migration**: Existing `db_proxies` configs using `cluster_key` require no changes. If you want to target a standard RDS instance, use `instance_key` instead.
+
+### Added
+
+#### Standard RDS Instance Support
+The module now supports **standard RDS instances** (`aws_db_instance`) alongside Aurora clusters. Users can deploy PostgreSQL, MySQL, MariaDB, Oracle, and SQL Server instances using the new `instances` variable.
+
+```hcl
+instances = {
+  primary = {
+    engine         = "postgres"
+    engine_version = "16.4"
+    instance_class = "db.r6g.large"
+
+    allocated_storage     = 100
+    max_allocated_storage = 500
+    storage_type          = "gp3"
+
+    master_username             = "dbadmin"
+    manage_master_user_password = true
+
+    vpc_security_group_ids = [aws_security_group.db.id]
+    subnet_ids             = module.vpc.database_subnets
+    create_subnet_group    = true
+    multi_az               = true
+  }
+}
+```
+
+**Features**:
+- 9 engine types: `postgres`, `mysql`, `mariadb`, `oracle-ee`, `oracle-se2`, `sqlserver-ee`, `sqlserver-se`, `sqlserver-ex`, `sqlserver-web`
+- Storage autoscaling via `max_allocated_storage`
+- gp3 storage with configurable IOPS and throughput
+- Multi-AZ deployment
+- Secrets Manager password management
+- Performance Insights and Enhanced Monitoring
+- CloudWatch Logs export
+- Custom parameter groups
+- Option groups (RDS-specific feature, not available in Aurora)
+- Blue/Green deployments
+- Point-in-time restore
+- Domain (Active Directory) integration
+- Character set configuration (Oracle)
+- Custom IAM instance profiles
+- CA certificate selection
+
+#### Self-Referencing Read Replicas
+Create read replicas that reference other instances within the same module using the `"self:"` prefix:
+
+```hcl
+instances = {
+  primary = {
+    engine         = "postgres"
+    instance_class = "db.r6g.large"
+    # ... primary config
+  }
+  replica = {
+    engine              = "postgres"
+    instance_class      = "db.r6g.large"
+    replicate_source_db = "self:primary"  # References primary above
+    # ... replica config
+  }
+}
+```
+
+#### RDS Proxy for Standard Instances
+RDS Proxy now supports both Aurora clusters and standard RDS instances:
+
+```hcl
+db_proxies = {
+  app_proxy = {
+    instance_key  = "primary"  # Target a standard RDS instance
+    engine_family = "POSTGRESQL"
+    # ...
+  }
+}
+```
+
+#### New Outputs
+Added 17 new outputs for standard RDS instances:
+- `db_instance_ids`, `db_instance_arns`, `db_instance_endpoints`
+- `db_instance_addresses`, `db_instance_ports`, `db_instance_hosted_zone_ids`
+- `db_instance_resource_ids`, `db_instance_status`
+- `db_instance_master_user_secret_arns` (sensitive)
+- `db_instance_master_usernames` (sensitive)
+- `db_instance_database_names`
+- `db_instance_availability_zones`, `db_instance_engine_versions`
+- `db_instance_subnet_group_names`
+- `db_option_group_ids`, `db_option_group_arns`
+
+#### New Examples
+- **rds-postgresql**: Standard RDS PostgreSQL with Multi-AZ, storage autoscaling, Performance Insights, parameter group, and self-referencing read replica
+- **rds-mysql**: Standard RDS MySQL with Multi-AZ, option group (MARIADB_AUDIT_PLUGIN), Blue/Green deployment, CloudWatch logs export
+
+### Changed
+- `clusters` variable now has `default = {}` (was required) - allows using only `instances` without providing empty `clusters`
+- `allocated_storage` in `instances` changed from required to optional (read replicas inherit from source)
+
+#### New Files
+- `rds/3-db-instances.tf`: Standard RDS instance resources (`aws_db_instance.this`, `aws_db_instance.read_replica`, `aws_db_subnet_group.instances`, `aws_db_option_group.this`)
+
+#### Modified Files
+- `rds/1-variables.tf`: Added `instances` variable, modified `db_proxies` and `clusters`
+- `rds/4-parameter-groups.tf`: Added `aws_db_parameter_group.instances`
+- `rds/5-monitoring.tf`: Added CloudWatch log groups and IAM roles for instances
+- `rds/7-proxies.tf`: Dual cluster/instance support in proxy target
+- `rds/8-locals.tf`: Added 9 new locals for instance processing
+- `rds/9-outputs.tf`: Added 17 new outputs for instances
+
 ## [v2.2.1] - 2026-02-27
 
 ### Changed
@@ -10,9 +133,6 @@
 
 ### Changed
 - Update AWS provider constraint to `~> 6.0` across module and examples
-
-
-All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).

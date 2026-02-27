@@ -113,10 +113,12 @@ resource "aws_db_proxy_default_target_group" "this" {
 resource "aws_db_proxy_target" "this" {
   for_each = var.create ? local.db_proxy_configs : {}
 
-  db_proxy_name         = aws_db_proxy.this[each.value.proxy_key].name
-  target_group_name     = aws_db_proxy_default_target_group.this[each.value.proxy_key].name
-  db_cluster_identifier = aws_rds_cluster.this[each.value.cluster_key].cluster_identifier
-  # Note: target_arn is auto-configured based on db_cluster_identifier
+  db_proxy_name     = aws_db_proxy.this[each.value.proxy_key].name
+  target_group_name = aws_db_proxy_default_target_group.this[each.value.proxy_key].name
+
+  # Connect to cluster OR standalone instance (mutually exclusive)
+  db_cluster_identifier  = each.value.cluster_key != null ? aws_rds_cluster.this[each.value.cluster_key].cluster_identifier : null
+  db_instance_identifier = each.value.instance_key != null ? aws_db_instance.this[each.value.instance_key].identifier : null
 
   depends_on = [
     aws_db_proxy_default_target_group.this

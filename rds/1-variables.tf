@@ -398,6 +398,191 @@ variable "clusters" {
     ])
     error_message = "Shard group max_acu must be between 768 and 3145728 (0.75 TB to 3072 TB) when shard_group is enabled."
   }
+
+  default = {}
+}
+
+# =============================================================================
+# Standard RDS Instances Configuration
+# =============================================================================
+
+variable "instances" {
+  description = "Map of standard RDS instance configurations (non-Aurora). Use 'clusters' for Aurora."
+  type = map(object({
+    # Engine Configuration
+    engine         = string
+    engine_version = optional(string)
+    license_model  = optional(string)
+
+    # Instance Configuration
+    instance_class = string
+
+    # Storage Configuration
+    allocated_storage     = optional(number)
+    max_allocated_storage = optional(number)
+    storage_type          = optional(string, "gp3")
+    iops                  = optional(number)
+    storage_throughput    = optional(number)
+
+    # Database Configuration
+    database_name = optional(string)
+    port          = optional(number)
+
+    # Credentials Management
+    master_username                     = optional(string)
+    master_password                     = optional(string)
+    manage_master_user_password         = optional(bool, true)
+    master_user_secret_kms_key_id       = optional(string)
+    iam_database_authentication_enabled = optional(bool, false)
+
+    # Network Configuration
+    vpc_security_group_ids = optional(list(string), [])
+    subnet_ids             = optional(list(string), [])
+    create_subnet_group    = optional(bool, true)
+    db_subnet_group_name   = optional(string)
+    network_type           = optional(string)
+    publicly_accessible    = optional(bool, false)
+    availability_zone      = optional(string)
+    multi_az               = optional(bool, false)
+
+    # Backup & Maintenance
+    backup_retention_period     = optional(number, 7)
+    backup_window               = optional(string)
+    backup_target               = optional(string)
+    maintenance_window          = optional(string)
+    auto_minor_version_upgrade  = optional(bool, true)
+    allow_major_version_upgrade = optional(bool, false)
+    apply_immediately           = optional(bool, false)
+
+    # Deletion & Snapshot
+    deletion_protection       = optional(bool, true)
+    skip_final_snapshot       = optional(bool, true)
+    final_snapshot_identifier = optional(string)
+    delete_automated_backups  = optional(bool, true)
+    copy_tags_to_snapshot     = optional(bool, true)
+
+    # Snapshot Restore
+    snapshot_identifier = optional(string)
+
+    # Point-in-time Restore
+    restore_to_point_in_time = optional(object({
+      source_db_instance_identifier            = optional(string)
+      source_db_instance_automated_backups_arn = optional(string)
+      source_dbi_resource_id                   = optional(string)
+      restore_time                             = optional(string)
+      use_latest_restorable_time               = optional(bool, true)
+    }))
+
+    # Encryption
+    storage_encrypted = optional(bool, true)
+    kms_key_id        = optional(string)
+
+    # Monitoring & Logging
+    monitoring_interval    = optional(number, 0)
+    monitoring_role_arn    = optional(string)
+    create_monitoring_role = optional(bool, true)
+
+    performance_insights_enabled          = optional(bool, false)
+    performance_insights_kms_key_id       = optional(string)
+    performance_insights_retention_period = optional(number, 7)
+
+    enabled_cloudwatch_logs_exports        = optional(list(string), [])
+    cloudwatch_log_group_retention_in_days = optional(number, 7)
+    cloudwatch_log_group_kms_key_id        = optional(string)
+
+    # Parameter Group
+    parameter_group = optional(object({
+      name        = optional(string)
+      family      = optional(string)
+      description = optional(string, "DB parameter group for RDS instance")
+      parameters = optional(list(object({
+        name         = string
+        value        = string
+        apply_method = optional(string, "immediate")
+      })), [])
+    }))
+
+    # Option Group (standard RDS only, not available in Aurora)
+    option_group = optional(object({
+      name                 = optional(string)
+      engine_name          = optional(string)
+      major_engine_version = optional(string)
+      description          = optional(string, "DB option group for RDS instance")
+      options = optional(list(object({
+        option_name                    = string
+        port                           = optional(number)
+        version                        = optional(string)
+        db_security_group_memberships  = optional(list(string))
+        vpc_security_group_memberships = optional(list(string))
+        option_settings = optional(list(object({
+          name  = string
+          value = string
+        })), [])
+      })), [])
+    }))
+
+    # Read Replica Configuration
+    replicate_source_db = optional(string)
+
+    # Blue/Green Deployment
+    blue_green_update = optional(object({
+      enabled = optional(bool, false)
+    }))
+
+    # CA Certificate
+    ca_cert_identifier = optional(string)
+
+    # Custom IAM Instance Profile
+    custom_iam_instance_profile = optional(string)
+
+    # Domain (Active Directory)
+    domain                 = optional(string)
+    domain_auth_secret_arn = optional(string)
+    domain_dns_ips         = optional(list(string))
+    domain_fqdn            = optional(string)
+    domain_iam_role_name   = optional(string)
+    domain_ou              = optional(string)
+
+    # Character Sets (Oracle)
+    character_set_name       = optional(string)
+    nchar_character_set_name = optional(string)
+
+    # Timeouts
+    timeouts = optional(object({
+      create = optional(string, "60m")
+      update = optional(string, "80m")
+      delete = optional(string, "60m")
+    }), {})
+
+    # Tags
+    tags = optional(map(string), {})
+  }))
+  default = {}
+
+  validation {
+    condition = alltrue([
+      for inst_key, inst in var.instances :
+      contains(["postgres", "mysql", "mariadb", "oracle-ee", "oracle-se2",
+      "sqlserver-ee", "sqlserver-se", "sqlserver-ex", "sqlserver-web"], inst.engine)
+    ])
+    error_message = "Engine must be one of: postgres, mysql, mariadb, oracle-ee, oracle-se2, sqlserver-ee, sqlserver-se, sqlserver-ex, sqlserver-web."
+  }
+
+  validation {
+    condition = alltrue([
+      for inst_key, inst in var.instances :
+      contains(["gp2", "gp3", "io1", "io2", "standard"], inst.storage_type)
+    ])
+    error_message = "Storage type must be one of: gp2, gp3, io1, io2, standard."
+  }
+
+  validation {
+    condition = alltrue([
+      for inst_key, inst in var.instances :
+      inst.backup_retention_period >= 0 && inst.backup_retention_period <= 35
+    ])
+    error_message = "Backup retention period must be between 0 and 35 days."
+  }
 }
 
 # =============================================================================
@@ -443,8 +628,9 @@ variable "global_clusters" {
 variable "db_proxies" {
   description = "Map of RDS Proxy configurations for connection pooling and management"
   type = map(object({
-    cluster_key                  = string # Reference to cluster in var.clusters
-    engine_family                = string # MYSQL or POSTGRESQL
+    cluster_key                  = optional(string) # Reference to cluster in var.clusters
+    instance_key                 = optional(string) # Reference to instance in var.instances
+    engine_family                = string           # MYSQL or POSTGRESQL
     require_tls                  = optional(bool, true)
     idle_client_timeout          = optional(number, 1800) # 0-28800 seconds
     max_connections_percent      = optional(number, 100)  # 1-100
@@ -488,6 +674,14 @@ variable "db_proxies" {
       proxy.max_connections_percent >= 1 && proxy.max_connections_percent <= 100
     ])
     error_message = "RDS Proxy max_connections_percent must be between 1 and 100."
+  }
+
+  validation {
+    condition = alltrue([
+      for proxy_key, proxy in var.db_proxies :
+      (proxy.cluster_key != null) != (proxy.instance_key != null)
+    ])
+    error_message = "Each RDS Proxy must reference exactly one of cluster_key or instance_key, not both."
   }
 }
 

@@ -60,6 +60,64 @@ resource "aws_iam_role_policy_attachment" "monitoring" {
 }
 
 # =============================================================================
+# CloudWatch Log Groups for Standard RDS Instances
+# =============================================================================
+
+resource "aws_cloudwatch_log_group" "instances" {
+  for_each = var.create ? local.instance_cloudwatch_log_groups : {}
+
+  name              = each.value.name
+  retention_in_days = each.value.retention_in_days
+  kms_key_id        = each.value.kms_key_id
+
+  tags = merge(
+    var.tags_common,
+    {
+      Name     = each.value.name
+      LogType  = each.value.log_type
+      Instance = each.value.instance_key
+    }
+  )
+}
+
+# =============================================================================
+# IAM Role for Enhanced Monitoring (Standard Instances)
+# =============================================================================
+
+resource "aws_iam_role" "instance_monitoring" {
+  for_each = var.create ? local.instance_monitoring_roles_to_create : {}
+
+  name = "${local.region_prefix}-role-rds-mon-inst-${var.account_name}-${var.project_name}-${each.key}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "monitoring.rds.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = merge(
+    var.tags_common,
+    {
+      Name = "${local.region_prefix}-role-rds-mon-inst-${var.account_name}-${var.project_name}-${each.key}"
+    }
+  )
+}
+
+resource "aws_iam_role_policy_attachment" "instance_monitoring" {
+  for_each = var.create ? local.instance_monitoring_roles_to_create : {}
+
+  role       = aws_iam_role.instance_monitoring[each.key].name
+  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
+}
+
+# =============================================================================
 # Activity Streams
 # =============================================================================
 

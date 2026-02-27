@@ -428,6 +428,142 @@ output "cloudwatch_log_groups_with_class" {
 }
 
 # =============================================================================
+# Standard RDS Instance Outputs
+# =============================================================================
+
+output "db_instance_ids" {
+  description = "Map of instance keys to RDS instance identifiers"
+  value = merge(
+    { for k, v in aws_db_instance.this : k => v.id },
+    { for k, v in aws_db_instance.read_replica : k => v.id }
+  )
+}
+
+output "db_instance_arns" {
+  description = "Map of instance keys to RDS instance ARNs"
+  value = merge(
+    { for k, v in aws_db_instance.this : k => v.arn },
+    { for k, v in aws_db_instance.read_replica : k => v.arn }
+  )
+}
+
+output "db_instance_endpoints" {
+  description = "Map of instance keys to RDS instance endpoints (address:port)"
+  value = merge(
+    { for k, v in aws_db_instance.this : k => v.endpoint },
+    { for k, v in aws_db_instance.read_replica : k => v.endpoint }
+  )
+}
+
+output "db_instance_addresses" {
+  description = "Map of instance keys to RDS instance addresses (hostname only)"
+  value = merge(
+    { for k, v in aws_db_instance.this : k => v.address },
+    { for k, v in aws_db_instance.read_replica : k => v.address }
+  )
+}
+
+output "db_instance_ports" {
+  description = "Map of instance keys to RDS instance ports"
+  value = merge(
+    { for k, v in aws_db_instance.this : k => v.port },
+    { for k, v in aws_db_instance.read_replica : k => v.port }
+  )
+}
+
+output "db_instance_hosted_zone_ids" {
+  description = "Map of instance keys to RDS instance hosted zone IDs"
+  value = merge(
+    { for k, v in aws_db_instance.this : k => v.hosted_zone_id },
+    { for k, v in aws_db_instance.read_replica : k => v.hosted_zone_id }
+  )
+}
+
+output "db_instance_resource_ids" {
+  description = "Map of instance keys to RDS instance resource IDs"
+  value = merge(
+    { for k, v in aws_db_instance.this : k => v.resource_id },
+    { for k, v in aws_db_instance.read_replica : k => v.resource_id }
+  )
+}
+
+output "db_instance_master_user_secret_arns" {
+  description = "Map of instance keys to Secrets Manager secret ARNs for master user passwords"
+  value = {
+    for k, v in aws_db_instance.this : k => try(v.master_user_secret[0].secret_arn, null)
+  }
+  sensitive = true
+}
+
+output "db_instance_master_usernames" {
+  description = "Map of instance keys to master usernames"
+  value = {
+    for k, v in aws_db_instance.this : k => v.username
+  }
+  sensitive = true
+}
+
+output "db_instance_database_names" {
+  description = "Map of instance keys to database names"
+  value = {
+    for k, v in aws_db_instance.this : k => v.db_name
+  }
+}
+
+output "db_instance_availability_zones" {
+  description = "Map of instance keys to availability zones"
+  value = merge(
+    { for k, v in aws_db_instance.this : k => v.availability_zone },
+    { for k, v in aws_db_instance.read_replica : k => v.availability_zone }
+  )
+}
+
+output "db_instance_engine_versions" {
+  description = "Map of instance keys to actual engine versions"
+  value = merge(
+    { for k, v in aws_db_instance.this : k => v.engine_version_actual },
+    { for k, v in aws_db_instance.read_replica : k => v.engine_version_actual }
+  )
+}
+
+output "db_instance_status" {
+  description = "Map of instance keys to instance status"
+  value = merge(
+    { for k, v in aws_db_instance.this : k => v.status },
+    { for k, v in aws_db_instance.read_replica : k => v.status }
+  )
+}
+
+# =============================================================================
+# Standard RDS Instance - Subnet Group Outputs
+# =============================================================================
+
+output "db_instance_subnet_group_names" {
+  description = "Map of instance keys to DB subnet group names"
+  value = {
+    for k, v in aws_db_subnet_group.instances : k => v.name
+  }
+}
+
+# =============================================================================
+# Standard RDS Instance - Option Group Outputs
+# =============================================================================
+
+output "db_option_group_ids" {
+  description = "Map of instance keys to option group IDs"
+  value = {
+    for k, v in aws_db_option_group.this : k => v.id
+  }
+}
+
+output "db_option_group_arns" {
+  description = "Map of instance keys to option group ARNs"
+  value = {
+    for k, v in aws_db_option_group.this : k => v.arn
+  }
+}
+
+# =============================================================================
 # Utility Outputs
 # =============================================================================
 
