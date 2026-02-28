@@ -30,7 +30,7 @@ resource "aws_iam_role" "rds_proxy" {
 
 # IAM Policy for Secrets Manager Access
 resource "aws_iam_role_policy" "rds_proxy_secrets" {
-  for_each = var.create ? var.db_proxies : {}
+  for_each = var.create ? local.db_proxy_secrets_policies : {}
 
   name = "${local.name_prefix}policy-rds-proxy-secrets-${var.account_name}-${var.project_name}-${each.key}"
   role = aws_iam_role.rds_proxy[each.key].id
@@ -44,7 +44,7 @@ resource "aws_iam_role_policy" "rds_proxy_secrets" {
           "secretsmanager:GetSecretValue",
           "secretsmanager:DescribeSecret"
         ]
-        Resource = each.value.auth.secret_arn != null ? [each.value.auth.secret_arn] : []
+        Resource = [each.value.secret_arn]
       }
     ]
   })
@@ -60,8 +60,12 @@ resource "aws_db_proxy" "this" {
   name          = each.value.db_proxy_name
   engine_family = each.value.engine_family
   auth {
-    auth_scheme               = each.value.auth.auth_scheme
-    secret_arn                = each.value.auth.secret_arn
+    auth_scheme = each.value.auth.auth_scheme
+    secret_arn = coalesce(
+      each.value.auth.secret_arn,
+      each.value.cluster_key != null ? try(aws_rds_cluster.this[each.value.cluster_key].master_user_secret[0].secret_arn, null) : null,
+      each.value.instance_key != null ? try(aws_db_instance.this[each.value.instance_key].master_user_secret[0].secret_arn, null) : null
+    )
     iam_auth                  = each.value.auth.iam_auth
     client_password_auth_type = each.value.auth.client_password_auth_type
     description               = each.value.auth.description
