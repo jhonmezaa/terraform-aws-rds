@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [v3.0.1] - 2026-02-27
 
 ### Added
+
 - Optional `identifier` field on `instances` variable to allow custom RDS instance names, overriding the auto-generated `{region_prefix}-rds-{account}-{project}-{key}` convention
 - `use_region_prefix` boolean variable (default: `true`) to control whether the region prefix is included in resource names. When `false`, names omit the prefix (e.g., `rds-prod-myapp-primary` instead of `ause1-rds-prod-myapp-primary`)
 
@@ -16,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### BREAKING CHANGES
 
 #### `db_proxies` variable modified
+
 - `cluster_key` changed from `string` (required) to `optional(string)` - existing configs that relied on implicit required-ness will still work, but the type signature changed
 - Added `instance_key = optional(string)` for targeting standard RDS instances
 - Added XOR validation: exactly one of `cluster_key` or `instance_key` must be provided
@@ -25,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 #### Standard RDS Instance Support
+
 The module now supports **standard RDS instances** (`aws_db_instance`) alongside Aurora clusters. Users can deploy PostgreSQL, MySQL, MariaDB, Oracle, and SQL Server instances using the new `instances` variable.
 
 ```hcl
@@ -50,6 +53,7 @@ instances = {
 ```
 
 **Features**:
+
 - 9 engine types: `postgres`, `mysql`, `mariadb`, `oracle-ee`, `oracle-se2`, `sqlserver-ee`, `sqlserver-se`, `sqlserver-ex`, `sqlserver-web`
 - Storage autoscaling via `max_allocated_storage`
 - gp3 storage with configurable IOPS and throughput
@@ -67,6 +71,7 @@ instances = {
 - CA certificate selection
 
 #### Self-Referencing Read Replicas
+
 Create read replicas that reference other instances within the same module using the `"self:"` prefix:
 
 ```hcl
@@ -86,6 +91,7 @@ instances = {
 ```
 
 #### RDS Proxy for Standard Instances
+
 RDS Proxy now supports both Aurora clusters and standard RDS instances:
 
 ```hcl
@@ -99,7 +105,9 @@ db_proxies = {
 ```
 
 #### New Outputs
+
 Added 17 new outputs for standard RDS instances:
+
 - `db_instance_ids`, `db_instance_arns`, `db_instance_endpoints`
 - `db_instance_addresses`, `db_instance_ports`, `db_instance_hosted_zone_ids`
 - `db_instance_resource_ids`, `db_instance_status`
@@ -111,17 +119,21 @@ Added 17 new outputs for standard RDS instances:
 - `db_option_group_ids`, `db_option_group_arns`
 
 #### New Examples
+
 - **rds-postgresql**: Standard RDS PostgreSQL with Multi-AZ, storage autoscaling, Performance Insights, parameter group, and self-referencing read replica
 - **rds-mysql**: Standard RDS MySQL with Multi-AZ, option group (MARIADB_AUDIT_PLUGIN), Blue/Green deployment, CloudWatch logs export
 
 ### Changed
+
 - `clusters` variable now has `default = {}` (was required) - allows using only `instances` without providing empty `clusters`
 - `allocated_storage` in `instances` changed from required to optional (read replicas inherit from source)
 
 #### New Files
+
 - `rds/3-db-instances.tf`: Standard RDS instance resources (`aws_db_instance.this`, `aws_db_instance.read_replica`, `aws_db_subnet_group.instances`, `aws_db_option_group.this`)
 
 #### Modified Files
+
 - `rds/1-variables.tf`: Added `instances` variable, modified `db_proxies` and `clusters`
 - `rds/4-parameter-groups.tf`: Added `aws_db_parameter_group.instances`
 - `rds/5-monitoring.tf`: Added CloudWatch log groups and IAM roles for instances
@@ -132,12 +144,13 @@ Added 17 new outputs for standard RDS instances:
 ## [v2.2.1] - 2026-02-27
 
 ### Changed
-- Standardize Terraform `required_version` to `~> 1.0` across module and examples
 
+- Standardize Terraform `required_version` to `~> 1.0` across module and examples
 
 ## [v2.2.0] - 2026-02-27
 
 ### Changed
+
 - Update AWS provider constraint to `~> 6.0` across module and examples
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
@@ -148,6 +161,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 #### Safety Default
+
 - Changed `apply_immediately` default from `true` to `false`
 - Changes now apply during the next maintenance window instead of immediately
 - Prevents unplanned downtime in production environments
@@ -162,6 +176,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The `databases` variable has been replaced with `clusters` for Aurora clusters. This provides better clarity and supports advanced features.
 
 **Before (v1.x)**:
+
 ```hcl
 databases = {
   mydb = {
@@ -174,6 +189,7 @@ databases = {
 ```
 
 **After (v2.0)**:
+
 ```hcl
 clusters = {
   mydb = {
@@ -189,12 +205,14 @@ clusters = {
 The module no longer creates security groups. Users must provide security group IDs via `vpc_security_group_ids`.
 
 **Before (v1.x)**:
+
 ```hcl
 # Module created security groups automatically
 create_security_group = true
 ```
 
 **After (v2.0)**:
+
 ```hcl
 # Bring your own security groups
 vpc_security_group_ids = [aws_security_group.db.id]
@@ -207,6 +225,7 @@ vpc_security_group_ids = [aws_security_group.db.id]
 Module files have been reorganized with numbered prefixes for logical ordering:
 
 **Before (v1.x)**:
+
 - `versions.tf`
 - `variables.tf`
 - `main.tf`
@@ -214,6 +233,7 @@ Module files have been reorganized with numbered prefixes for logical ordering:
 - `locals.tf`
 
 **After (v2.0)**:
+
 - `0-versions.tf`
 - `1-variables.tf`
 - `2-cluster.tf`
@@ -232,12 +252,12 @@ Module files have been reorganized with numbered prefixes for logical ordering:
 
 Some output names have been standardized:
 
-| Old Output (v1.x) | New Output (v2.0) |
-|-------------------|-------------------|
-| `rds_cluster_endpoints` | `cluster_endpoints` |
+| Old Output (v1.x)              | New Output (v2.0)          |
+| ------------------------------ | -------------------------- |
+| `rds_cluster_endpoints`        | `cluster_endpoints`        |
 | `rds_cluster_reader_endpoints` | `cluster_reader_endpoints` |
-| `rds_cluster_ids` | `cluster_ids` |
-| `rds_cluster_arns` | `cluster_arns` |
+| `rds_cluster_ids`              | `cluster_ids`              |
+| `rds_cluster_arns`             | `cluster_arns`             |
 
 **Migration**: Update your Terraform code to use the new output names.
 
@@ -265,6 +285,7 @@ clusters = {
 ```
 
 **Features**:
+
 - Horizontal scaling from 768 ACU (0.75 TB) to 3,145,728 ACU (3 PB)
 - Automatic sharding and distributed query processing
 - PostgreSQL 15.5+ only
@@ -293,6 +314,7 @@ clusters = {
 ```
 
 **Features**:
+
 - Sub-second cross-region replication
 - Up to 5 secondary regions
 - Write forwarding from secondary to primary
@@ -380,6 +402,7 @@ clusters = {
 ```
 
 **Features**:
+
 - Target tracking policies (CPU, connections)
 - Step scaling for fine-grained control with CloudWatch alarms
 - Scheduled actions for predictable patterns
@@ -409,6 +432,7 @@ db_proxies = {
 ```
 
 **Features**:
+
 - Connection pooling to reduce database load
 - Improved failover time (< 30 seconds)
 - IAM authentication support
@@ -439,6 +463,7 @@ clusters = {
 ```
 
 **Features**:
+
 - Performance Insights with extended retention (up to 731 days)
 - Enhanced Monitoring with 1-60 second granularity
 - CloudWatch Logs export for all engine types
@@ -499,6 +524,7 @@ clusters = {
 ```
 
 **Features**:
+
 - Automatic password generation
 - Automatic password rotation
 - No plaintext passwords in Terraform state
@@ -538,6 +564,7 @@ clusters = {
 ```
 
 **Features**:
+
 - Backtrack support (up to 72 hours)
 - Binary log format configuration
 - MySQL-specific CloudWatch logs (audit, error, general, slowquery)
@@ -580,6 +607,7 @@ clusters = {
 ```
 
 **Features**:
+
 - Logical replication for CDC
 - PostgreSQL extensions (pgvector, PostGIS, pg_stat_statements, pgaudit)
 - Auto-explain for slow queries
@@ -599,6 +627,7 @@ Eight comprehensive, production-ready examples:
 8. **aurora-provisioned**: Aurora PostgreSQL with custom endpoints and heterogeneous instances
 
 Each example includes:
+
 - Complete Terraform configuration
 - Comprehensive variable definitions
 - Validated outputs
@@ -672,6 +701,7 @@ Added 25+ new outputs (from 28 to 53 outputs):
 #### Critical Fixes
 
 - **Fixed parameter groups structure bug**: Module was expecting `cluster_parameter_group` (object with family, description, parameters array) but documentation showed `cluster_parameters` (map). Updated all examples to use correct structure.
+
   ```hcl
   # BEFORE (incorrect - not working)
   cluster_parameters = {
@@ -687,7 +717,9 @@ Added 25+ new outputs (from 28 to 53 outputs):
     ]
   }
   ```
+
 - **Fixed autoscaling structure**: Corrected nested autoscaling configuration structure
+
   ```hcl
   # BEFORE (incorrect)
   autoscaling_enabled = true

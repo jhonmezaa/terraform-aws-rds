@@ -122,6 +122,7 @@ module "rds" {
 > **Custom naming**: By default, identifiers follow the convention `{region_prefix}-rds-{account}-{project}-{key}`. You can customize this in two ways:
 >
 > 1. **Disable region prefix globally** with `use_region_prefix = false` (names become `rds-{account}-{project}-{key}`):
+>
 > ```hcl
 > module "rds" {
 >   source            = "./rds"
@@ -131,6 +132,7 @@ module "rds" {
 > ```
 >
 > 2. **Override a specific instance name** with the `identifier` field:
+>
 > ```hcl
 > instances = {
 >   legacy = {
@@ -368,15 +370,15 @@ module "aurora_with_proxy" {
 
 Complete, production-ready examples are available in the [examples](./examples) directory:
 
-| Example                                                               | Description                | Features                                             |
-| --------------------------------------------------------------------- | -------------------------- | ---------------------------------------------------- |
-| [rds-postgresql](./examples/rds-postgresql)                           | Standard RDS PostgreSQL    | Multi-AZ, gp3 storage autoscaling, read replica      |
-| [rds-mysql](./examples/rds-mysql)                                     | Standard RDS MySQL         | Multi-AZ, option group, audit plugin, Blue/Green      |
-| [aurora-limitless](./examples/aurora-limitless)                       | Aurora Limitless Database  | Horizontal scaling, ACU-based, 768 ACU to 3 PB       |
-| [aurora-global-cluster](./examples/aurora-global-cluster)             | Multi-region DR            | Cross-region replication, write forwarding, failover  |
-| [aurora-autoscaling-advanced](./examples/aurora-autoscaling-advanced) | Advanced Autoscaling       | Target tracking, step scaling, scheduled actions      |
-| [aurora-mysql-advanced](./examples/aurora-mysql-advanced)             | MySQL Features             | Backtrack, binary logs, audit logging                 |
-| [aurora-postgresql-advanced](./examples/aurora-postgresql-advanced)   | PostgreSQL Features        | pgvector, PostGIS, logical replication, JSONB         |
+| Example                                                               | Description               | Features                                             |
+| --------------------------------------------------------------------- | ------------------------- | ---------------------------------------------------- |
+| [rds-postgresql](./examples/rds-postgresql)                           | Standard RDS PostgreSQL   | Multi-AZ, gp3 storage autoscaling, read replica      |
+| [rds-mysql](./examples/rds-mysql)                                     | Standard RDS MySQL        | Multi-AZ, option group, audit plugin, Blue/Green     |
+| [aurora-limitless](./examples/aurora-limitless)                       | Aurora Limitless Database | Horizontal scaling, ACU-based, 768 ACU to 3 PB       |
+| [aurora-global-cluster](./examples/aurora-global-cluster)             | Multi-region DR           | Cross-region replication, write forwarding, failover |
+| [aurora-autoscaling-advanced](./examples/aurora-autoscaling-advanced) | Advanced Autoscaling      | Target tracking, step scaling, scheduled actions     |
+| [aurora-mysql-advanced](./examples/aurora-mysql-advanced)             | MySQL Features            | Backtrack, binary logs, audit logging                |
+| [aurora-postgresql-advanced](./examples/aurora-postgresql-advanced)   | PostgreSQL Features       | pgvector, PostGIS, logical replication, JSONB        |
 
 Each example includes:
 
@@ -393,16 +395,16 @@ Each example includes:
 
 ### Core Variables
 
-| Name              | Description                                      | Type          | Default |
-| ----------------- | ------------------------------------------------ | ------------- | ------- |
-| account_name      | Account name for resource naming                 | `string`      | required|
-| project_name      | Project name for resource naming                 | `string`      | required|
-| use_region_prefix | Include region prefix in resource names           | `bool`        | `true`  |
-| region_prefix     | Custom region prefix (auto-derived if null)       | `string`      | `null`  |
-| clusters          | Map of Aurora cluster configurations              | `map(object)` | `{}`    |
-| instances         | Map of standard RDS instance configs              | `map(object)` | `{}`    |
-| global_clusters   | Map of global cluster configurations              | `map(object)` | `{}`    |
-| db_proxies        | Map of RDS Proxy configurations                   | `map(object)` | `{}`    |
+| Name              | Description                                 | Type          | Default  |
+| ----------------- | ------------------------------------------- | ------------- | -------- |
+| account_name      | Account name for resource naming            | `string`      | required |
+| project_name      | Project name for resource naming            | `string`      | required |
+| use_region_prefix | Include region prefix in resource names     | `bool`        | `true`   |
+| region_prefix     | Custom region prefix (auto-derived if null) | `string`      | `null`   |
+| clusters          | Map of Aurora cluster configurations        | `map(object)` | `{}`     |
+| instances         | Map of standard RDS instance configs        | `map(object)` | `{}`     |
+| global_clusters   | Map of global cluster configurations        | `map(object)` | `{}`     |
+| db_proxies        | Map of RDS Proxy configurations             | `map(object)` | `{}`     |
 
 ### Cluster Configuration
 
@@ -433,23 +435,23 @@ See [1-variables.tf](./rds/1-variables.tf) for the complete list of 90+ variable
 
 Each instance in the `instances` map supports the following key attributes:
 
-| Name                        | Description                                          | Type           | Default     |
-| --------------------------- | ---------------------------------------------------- | -------------- | ----------- |
-| identifier                  | Custom RDS identifier (overrides auto-generated name)| `string`       | `null`      |
-| engine                      | Database engine (postgres, mysql, mariadb, etc.)     | `string`       | required    |
-| engine_version              | Engine version                                       | `string`       | `null`      |
-| instance_class              | Instance class (db.r6g.large, db.t3.medium, etc.)   | `string`       | required    |
-| allocated_storage           | Allocated storage in GB                              | `number`       | `null`      |
-| max_allocated_storage       | Max storage for autoscaling                          | `number`       | `null`      |
-| storage_type                | Storage type (gp3, gp2, io1, io2)                   | `string`       | `"gp3"`     |
-| multi_az                    | Enable Multi-AZ deployment                           | `bool`         | `false`     |
-| manage_master_user_password | Use Secrets Manager for passwords                    | `bool`         | `true`      |
-| replicate_source_db         | Source for read replica (ARN or "self:key")          | `string`       | `null`      |
-| parameter_group             | Custom parameter group configuration                 | `object`       | `null`      |
-| option_group                | Option group configuration (RDS only, not Aurora)    | `object`       | `null`      |
-| deletion_protection         | Enable deletion protection                           | `bool`         | `true`      |
-| storage_encrypted           | Enable encryption                                    | `bool`         | `true`      |
-| performance_insights_enabled| Enable Performance Insights                          | `bool`         | `false`     |
+| Name                         | Description                                           | Type     | Default  |
+| ---------------------------- | ----------------------------------------------------- | -------- | -------- |
+| identifier                   | Custom RDS identifier (overrides auto-generated name) | `string` | `null`   |
+| engine                       | Database engine (postgres, mysql, mariadb, etc.)      | `string` | required |
+| engine_version               | Engine version                                        | `string` | `null`   |
+| instance_class               | Instance class (db.r6g.large, db.t3.medium, etc.)     | `string` | required |
+| allocated_storage            | Allocated storage in GB                               | `number` | `null`   |
+| max_allocated_storage        | Max storage for autoscaling                           | `number` | `null`   |
+| storage_type                 | Storage type (gp3, gp2, io1, io2)                     | `string` | `"gp3"`  |
+| multi_az                     | Enable Multi-AZ deployment                            | `bool`   | `false`  |
+| manage_master_user_password  | Use Secrets Manager for passwords                     | `bool`   | `true`   |
+| replicate_source_db          | Source for read replica (ARN or "self:key")           | `string` | `null`   |
+| parameter_group              | Custom parameter group configuration                  | `object` | `null`   |
+| option_group                 | Option group configuration (RDS only, not Aurora)     | `object` | `null`   |
+| deletion_protection          | Enable deletion protection                            | `bool`   | `true`   |
+| storage_encrypted            | Enable encryption                                     | `bool`   | `true`   |
+| performance_insights_enabled | Enable Performance Insights                           | `bool`   | `false`  |
 
 ## 📤 Outputs
 
@@ -487,19 +489,19 @@ The module provides 70 outputs organized by resource type:
 
 ### Standard RDS Instance Outputs
 
-| Name                              | Description                           |
-| --------------------------------- | ------------------------------------- |
-| db_instance_ids                   | Map of RDS instance identifiers       |
-| db_instance_arns                  | Map of RDS instance ARNs              |
-| db_instance_endpoints             | Map of RDS instance endpoints         |
-| db_instance_addresses             | Map of RDS instance addresses         |
-| db_instance_ports                 | Map of RDS instance ports             |
-| db_instance_resource_ids          | Map of RDS instance resource IDs      |
-| db_instance_status                | Map of RDS instance statuses          |
+| Name                                | Description                             |
+| ----------------------------------- | --------------------------------------- |
+| db_instance_ids                     | Map of RDS instance identifiers         |
+| db_instance_arns                    | Map of RDS instance ARNs                |
+| db_instance_endpoints               | Map of RDS instance endpoints           |
+| db_instance_addresses               | Map of RDS instance addresses           |
+| db_instance_ports                   | Map of RDS instance ports               |
+| db_instance_resource_ids            | Map of RDS instance resource IDs        |
+| db_instance_status                  | Map of RDS instance statuses            |
 | db_instance_master_user_secret_arns | Map of Secrets Manager ARNs (sensitive) |
-| db_instance_database_names        | Map of database names                 |
-| db_option_group_ids               | Map of option group identifiers       |
-| db_option_group_arns              | Map of option group ARNs              |
+| db_instance_database_names          | Map of database names                   |
+| db_option_group_ids                 | Map of option group identifiers         |
+| db_option_group_arns                | Map of option group ARNs                |
 
 ### Autoscaling Outputs
 
@@ -695,16 +697,16 @@ db_proxies = {
 ┌─────────────────────────────────────┐
 │        Aurora Cluster (HA)          │
 │                                     │
-│  ┌────────────┐   ┌────────────┐  │
-│  │ Writer     │   │ Reader 1   │  │
-│  │ (AZ-a)     │──►│ (AZ-b)     │  │
-│  └────────────┘   └────────────┘  │
+│  ┌────────────┐   ┌────────────┐    │
+│  │ Writer     │   │ Reader 1   │    │
+│  │ (AZ-a)     │──►│ (AZ-b)     │    │
+│  └────────────┘   └────────────┘    │
 │         │                           │
 │         ▼                           │
-│  ┌────────────┐                    │
-│  │ Reader 2   │                    │
-│  │ (AZ-c)     │                    │
-│  └────────────┘                    │
+│  ┌────────────┐                     │
+│  │ Reader 2   │                     │
+│  │ (AZ-c)     │                     │
+│  └────────────┘                     │
 └─────────────────────────────────────┘
 ```
 
