@@ -239,6 +239,27 @@ locals {
     })
   }
 
+  # Resolve secret ARNs for RDS Proxy IAM policies
+  # When secret_arn is explicitly provided, use it directly.
+  # When secret_arn is null and the proxy references a cluster/instance with
+  # manage_master_user_password=true, resolve the secret ARN from the created resource.
+  # Only create the policy when a valid secret ARN can be resolved.
+  db_proxy_secrets_policies = {
+    for proxy_key, proxy in var.db_proxies :
+    proxy_key => {
+      secret_arn = coalesce(
+        proxy.auth.secret_arn,
+        proxy.cluster_key != null ? try(aws_rds_cluster.this[proxy.cluster_key].master_user_secret[0].secret_arn, null) : null,
+        proxy.instance_key != null ? try(aws_db_instance.this[proxy.instance_key].master_user_secret[0].secret_arn, null) : null
+      )
+    }
+    if(
+      proxy.auth.secret_arn != null ||
+      (proxy.cluster_key != null && try(var.clusters[proxy.cluster_key].manage_master_user_password, false)) ||
+      (proxy.instance_key != null && try(var.instances[proxy.instance_key].manage_master_user_password, false))
+    )
+  }
+
   # =============================================================================
   # Enhanced Autoscaling - Split by Policy Type
   # =============================================================================

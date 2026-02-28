@@ -29,7 +29,7 @@ resource "aws_db_instance" "this" {
   # Credentials (skip for read replicas)
   username                      = each.value.is_read_replica ? null : each.value.master_username
   password                      = each.value.is_read_replica ? null : (!each.value.manage_master_user_password ? each.value.master_password : null)
-  manage_master_user_password   = each.value.is_read_replica ? null : each.value.manage_master_user_password
+  manage_master_user_password   = each.value.is_read_replica ? null : (each.value.manage_master_user_password ? true : null)
   master_user_secret_kms_key_id = each.value.is_read_replica ? null : (each.value.manage_master_user_password ? each.value.master_user_secret_kms_key_id : null)
 
   iam_database_authentication_enabled = each.value.iam_database_authentication_enabled
