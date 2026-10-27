@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.0.7] - 2026-10-27
+
+### Changed
+
+- Normalize CHANGELOG: preamble moved to the top, all headings use the `## [vX.Y.Z] - YYYY-MM-DD` format, entries sorted by version (newest first)
+- Remove the duplicated Keep a Changelog preamble
+- Add missing entries for v3.0.2 and v3.0.3, reconstructed from git history
+- Set the v1.0.0 entry date from its git tag (was "Previous Version")
+
 ## [v3.0.6] - 2026-10-27
 
 ### Fixed
@@ -29,6 +38,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Update README documentation and CHANGELOG formatting
+
+## [v3.0.3] - 2026-02-28
+
+### Changed
+
+- Update README and CHANGELOG documentation
+
+## [v3.0.2] - 2026-02-28
+
+### Fixed
+
+- RDS Proxy IAM policy failing with an empty `Resource` array when `secret_arn` is null: the secret ARN is now auto-resolved from the cluster/instance `master_user_secret` when `manage_master_user_password` is enabled
+- RDS Proxy `auth` block now auto-resolves `secret_arn` from the referenced cluster or instance when it is not explicitly provided
+- `manage_master_user_password` conflict with `password` on standard RDS instances: when set to `false`, `null` is now passed instead of `false` to avoid the provider-level conflict
 
 ## [v3.0.1] - 2026-02-27
 
