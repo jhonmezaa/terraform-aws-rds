@@ -1,6 +1,15 @@
 # Changelog
 
 
+## [v3.0.5] - 2026-10-27
+
+### Changed
+
+- Use minimum-only version constraints in the reusable module, following HashiCorp guidance for shared modules: AWS provider `~> 6.0` -> `>= 6.0`
+- Set module `required_version` to `>= 1.3` (was `~> 1.0`): the module uses `optional()` object type attributes (with defaults) and the `startswith()` function, both introduced in Terraform 1.3; no newer features (`moved`/`import`/`check`/`removed`, cross-variable validations, provider-defined functions, ephemeral resources) are used
+- Examples (root modules) keep pessimistic constraints: `required_version` `~> 1.3`, AWS provider `~> 6.0`
+- Update Terraform and provider requirements in README and example READMEs
+
 ## [v3.0.4] - 2026-04-25
 
 ### Changed

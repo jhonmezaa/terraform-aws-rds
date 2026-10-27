@@ -63,8 +63,8 @@ Aurora Global Database is a feature that spans multiple AWS regions, enabling:
 
 ### AWS Credentials
 - AWS credentials with permissions to create RDS resources in **both regions**
-- Terraform >= 1.5.0
-- AWS Provider >= 5.0
+- Terraform ~> 1.3
+- AWS Provider ~> 6.0
 
 ## Configuration
 

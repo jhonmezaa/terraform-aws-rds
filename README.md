@@ -686,8 +686,8 @@ db_proxies = {
 
 | Name      | Version  |
 | --------- | -------- |
-| terraform | >= 1.5.0 |
-| aws       | >= 5.0   |
+| terraform | >= 1.3   |
+| aws       | >= 6.0   |
 
 ## 🏗️ Architecture Patterns
 

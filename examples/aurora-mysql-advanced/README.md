@@ -21,8 +21,8 @@ Aurora MySQL is a MySQL-compatible relational database built for the cloud, comb
 
 1. **VPC with at least 2 subnets** in different Availability Zones
 2. **Security group** allowing MySQL traffic (port 3306)
-3. **Terraform >= 1.5.0**
-4. **AWS Provider >= 5.0**
+3. **Terraform ~> 1.3**
+4. **AWS Provider ~> 6.0**
 
 ## Architecture
 
