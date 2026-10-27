@@ -23,8 +23,8 @@ Aurora Limitless Database is a new deployment option that enables horizontal sca
 
 1. **VPC with at least 2 subnets** in different Availability Zones
 2. **Security group** allowing PostgreSQL traffic (port 5432)
-3. **Terraform >= 1.5.0**
-4. **AWS Provider >= 5.0**
+3. **Terraform ~> 1.3**
+4. **AWS Provider ~> 6.0**
 
 ## Configuration
 
