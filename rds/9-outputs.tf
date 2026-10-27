@@ -569,7 +569,7 @@ output "db_option_group_arns" {
 
 output "region" {
   description = "AWS region where resources are deployed"
-  value       = data.aws_region.current.id
+  value       = data.aws_region.current.region
 }
 
 output "region_prefix" {
