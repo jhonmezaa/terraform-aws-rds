@@ -1,6 +1,16 @@
 # Changelog
 
 
+## [v3.0.6] - 2026-10-27
+
+### Fixed
+
+- Replace deprecated `data.aws_region.current.id` with `data.aws_region.current.region` (deprecated in AWS provider v6) in module locals and the `region` output
+
+### Changed
+
+- Add `versions.tf` (Terraform `~> 1.3`, AWS provider `~> 6.0`, `provider "aws"` block) and an `aws_region` variable to the `aurora-cluster`, `aurora-provisioned`, `aurora-serverless-v2`, `rds-mysql` and `rds-postgresql` examples, matching the other examples
+
 ## [v3.0.5] - 2026-10-27
 
 ### Changed
