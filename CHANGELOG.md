@@ -1,5 +1,9 @@
 # Changelog
 
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [v3.0.6] - 2026-10-27
 
@@ -25,11 +29,6 @@
 ### Changed
 
 - Update README documentation and CHANGELOG formatting
-
-All notable changes to this project will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [v3.0.1] - 2026-02-27
 
@@ -179,10 +178,7 @@ Added 17 new outputs for standard RDS instances:
 
 - Update AWS provider constraint to `~> 6.0` across module and examples
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## [2.1.0] - 2026-02-27
+## [v2.1.0] - 2026-02-27
 
 ### Changed
 
@@ -193,7 +189,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Prevents unplanned downtime in production environments
 - Users can still override with `apply_immediately = true` per cluster
 
-## [2.0.0] - 2025-12-20
+## [v2.0.0] - 2025-12-20
 
 ### ⚠️ BREAKING CHANGES
 
@@ -896,7 +892,7 @@ terraform apply
 
 Update any documentation or runbooks that reference the old variable names or outputs.
 
-## [1.0.0] - Previous Version
+## [v1.0.0] - 2025-12-23
 
 Initial release with basic RDS and Aurora support.
 
