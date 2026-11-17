@@ -22,7 +22,8 @@ resource "aws_rds_cluster_parameter_group" "this" {
     var.tags_common,
     {
       Name = coalesce(each.value.name, "${local.name_prefix}cluster-pg-${var.account_name}-${var.project_name}-${each.key}")
-    }
+    },
+    local.managed_by_tags
   )
 
   lifecycle {
@@ -54,7 +55,8 @@ resource "aws_db_parameter_group" "this" {
     var.tags_common,
     {
       Name = coalesce(each.value.name, "${local.name_prefix}db-pg-${var.account_name}-${var.project_name}-${each.key}")
-    }
+    },
+    local.managed_by_tags
   )
 
   lifecycle {
@@ -86,7 +88,8 @@ resource "aws_db_parameter_group" "instances" {
     var.tags_common,
     {
       Name = coalesce(each.value.name, "${local.name_prefix}db-pg-inst-${var.account_name}-${var.project_name}-${each.key}")
-    }
+    },
+    local.managed_by_tags
   )
 
   lifecycle {

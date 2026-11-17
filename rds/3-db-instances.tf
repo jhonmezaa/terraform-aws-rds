@@ -8,9 +8,11 @@ resource "aws_db_instance" "this" {
   identifier = each.value.identifier
 
   # Engine
-  engine         = each.value.engine
-  engine_version = each.value.engine_version
-  license_model  = each.value.license_model
+  engine                   = each.value.engine
+  engine_version           = each.value.engine_version
+  engine_lifecycle_support = each.value.engine_lifecycle_support
+  license_model            = each.value.license_model
+  timezone                 = each.value.timezone
 
   # Instance
   instance_class = each.value.instance_class
@@ -21,6 +23,7 @@ resource "aws_db_instance" "this" {
   storage_type          = each.value.storage_type
   iops                  = each.value.iops
   storage_throughput    = each.value.storage_throughput
+  dedicated_log_volume  = each.value.dedicated_log_volume
 
   # Database
   db_name = each.value.is_read_replica ? null : each.value.database_name
@@ -47,6 +50,7 @@ resource "aws_db_instance" "this" {
   # Backup
   backup_retention_period = each.value.backup_retention_period
   backup_window           = each.value.backup_window
+  backup_target           = each.value.backup_target
   maintenance_window      = each.value.maintenance_window
 
   # Version Upgrades
@@ -55,9 +59,10 @@ resource "aws_db_instance" "this" {
   apply_immediately           = each.value.apply_immediately
 
   # Deletion & Snapshots
-  deletion_protection       = each.value.deletion_protection
-  skip_final_snapshot       = each.value.skip_final_snapshot
-  final_snapshot_identifier = each.value.final_snapshot_id
+  deletion_protection = each.value.deletion_protection
+  skip_final_snapshot = each.value.skip_final_snapshot
+  # AWS does not allow a final snapshot when deleting a read replica
+  final_snapshot_identifier = each.value.is_read_replica ? null : each.value.final_snapshot_id
   delete_automated_backups  = each.value.delete_automated_backups
   copy_tags_to_snapshot     = each.value.copy_tags_to_snapshot
 
@@ -82,15 +87,16 @@ resource "aws_db_instance" "this" {
 
   # Monitoring
   monitoring_interval = each.value.monitoring_interval
-  monitoring_role_arn = each.value.monitoring_interval > 0 ? coalesce(
+  monitoring_role_arn = each.value.monitoring_interval > 0 ? try(coalesce(
     each.value.monitoring_role_arn,
-    each.value.create_monitoring_role ? try(aws_iam_role.instance_monitoring[each.key].arn, null) : null
-  ) : null
+    each.value.create_monitoring_role ? aws_iam_role.instance_monitoring[each.key].arn : null
+  ), null) : null
 
   # Performance Insights
   performance_insights_enabled          = each.value.performance_insights_enabled
   performance_insights_kms_key_id       = each.value.performance_insights_enabled ? each.value.performance_insights_kms_key_id : null
   performance_insights_retention_period = each.value.performance_insights_enabled ? each.value.performance_insights_retention_period : null
+  database_insights_mode                = each.value.database_insights_mode
 
   # CloudWatch Logs
   enabled_cloudwatch_logs_exports = each.value.enabled_cloudwatch_logs_exports
@@ -200,10 +206,10 @@ resource "aws_db_instance" "read_replica" {
 
   # Monitoring
   monitoring_interval = each.value.monitoring_interval
-  monitoring_role_arn = each.value.monitoring_interval > 0 ? coalesce(
+  monitoring_role_arn = each.value.monitoring_interval > 0 ? try(coalesce(
     each.value.monitoring_role_arn,
-    each.value.create_monitoring_role ? try(aws_iam_role.instance_monitoring[each.key].arn, null) : null
-  ) : null
+    each.value.create_monitoring_role ? aws_iam_role.instance_monitoring[each.key].arn : null
+  ), null) : null
 
   # Performance Insights
   performance_insights_enabled          = each.value.performance_insights_enabled
@@ -246,6 +252,23 @@ resource "aws_db_instance" "read_replica" {
 }
 
 # =============================================================================
+# Final Snapshot Identifier Suffixes (stable across plans)
+# =============================================================================
+
+resource "random_id" "instance_snapshot" {
+  for_each = {
+    for inst_key, inst in var.instances : inst_key => inst
+    if var.create && !inst.skip_final_snapshot && inst.final_snapshot_identifier == null && inst.replicate_source_db == null
+  }
+
+  keepers = {
+    identifier = coalesce(each.value.identifier, "${local.name_prefix}rds-${var.account_name}-${var.project_name}-${each.key}")
+  }
+
+  byte_length = 4
+}
+
+# =============================================================================
 # DB Subnet Groups for Standard Instances
 # =============================================================================
 
@@ -261,7 +284,8 @@ resource "aws_db_subnet_group" "instances" {
     each.value.tags,
     {
       Name = "${local.name_prefix}subnet-group-${var.account_name}-${var.project_name}-${each.key}"
-    }
+    },
+    local.managed_by_tags
   )
 }
 
@@ -300,7 +324,8 @@ resource "aws_db_option_group" "this" {
     var.tags_common,
     {
       Name = coalesce(each.value.name, "${local.name_prefix}option-group-${var.account_name}-${var.project_name}-${each.key}")
-    }
+    },
+    local.managed_by_tags
   )
 
   lifecycle {

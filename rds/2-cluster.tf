@@ -14,7 +14,8 @@ resource "aws_db_subnet_group" "this" {
     each.value.tags,
     {
       Name = "${local.name_prefix}subnet-group-${var.account_name}-${var.project_name}-${each.key}"
-    }
+    },
+    local.managed_by_tags
   )
 }
 
@@ -35,6 +36,8 @@ resource "aws_rds_global_cluster" "this" {
   force_destroy                = each.value.force_destroy
   source_db_cluster_identifier = each.value.source_db_cluster_identifier
 
+  tags = local.global_cluster_tags[each.key]
+
   lifecycle {
     ignore_changes = [
       engine_version
@@ -50,42 +53,43 @@ resource "aws_rds_cluster" "this" {
   for_each = var.create ? var.clusters : {}
 
   cluster_identifier_prefix = each.value.cluster_identifier_prefix
-  cluster_identifier        = each.value.cluster_identifier_prefix == null ? "${local.name_prefix}cluster-${var.account_name}-${var.project_name}-${each.key}" : null
+  cluster_identifier        = each.value.cluster_identifier_prefix == null ? local.cluster_names[each.key] : null
 
   # Engine Configuration
-  engine                    = each.value.engine
-  engine_version            = each.value.engine_version
-  engine_mode               = each.value.engine_mode
+  engine         = each.value.engine
+  engine_version = each.value.engine_version
+  # Aurora Limitless clusters are created without an engine mode
+  engine_mode               = each.value.cluster_scalability_type == "limitless" ? "" : each.value.engine_mode
   engine_lifecycle_support  = each.value.engine_lifecycle_support
   cluster_scalability_type  = each.value.cluster_scalability_type
   ca_certificate_identifier = each.value.cluster_ca_cert_identifier
 
-  # Database
-  database_name   = each.value.database_name
-  master_username = each.value.master_username
-  master_password = !each.value.manage_master_user_password ? each.value.master_password : null
+  # Database (secondary clusters of a global database inherit them from the primary)
+  database_name   = each.value.is_primary_cluster ? each.value.database_name : null
+  master_username = each.value.is_primary_cluster ? each.value.master_username : null
+  master_password = each.value.is_primary_cluster && !each.value.manage_master_user_password ? each.value.master_password : null
   port            = local.cluster_ports[each.key]
 
   # Managed Password via AWS Secrets Manager
-  manage_master_user_password   = each.value.manage_master_user_password
-  master_user_secret_kms_key_id = each.value.master_user_secret_kms_key_id
+  # Sent only when true: "false" conflicts with master_password in the provider
+  manage_master_user_password   = each.value.is_primary_cluster && each.value.manage_master_user_password ? true : null
+  master_user_secret_kms_key_id = each.value.is_primary_cluster && each.value.manage_master_user_password ? each.value.master_user_secret_kms_key_id : null
 
   # Note: Password rotation is configured separately via aws_secretsmanager_secret_rotation
-  # when manage_master_user_password is enabled. RDS cluster resource doesn't expose
-  # rotation schedule parameters directly.
+  # (see 5-monitoring.tf) when manage_master_user_password_rotation_automatically = true.
 
   # IAM Authentication
   iam_database_authentication_enabled = each.value.iam_database_authentication_enabled
 
   # Network (security group IDs passed directly - no module creation)
   vpc_security_group_ids = each.value.vpc_security_group_ids
-  db_subnet_group_name   = each.value.create_subnet_group ? aws_db_subnet_group.this[each.key].name : each.value.db_subnet_group_name
+  db_subnet_group_name   = contains(keys(local.subnet_groups_to_create), each.key) ? aws_db_subnet_group.this[each.key].name : each.value.db_subnet_group_name
   network_type           = each.value.network_type
   availability_zones     = length(each.value.availability_zones) > 0 ? each.value.availability_zones : null
 
   # Backup
   backup_retention_period      = each.value.backup_retention_period
-  preferred_backup_window      = each.value.preferred_backup_window
+  preferred_backup_window      = each.value.engine_mode == "serverless" ? null : each.value.preferred_backup_window
   preferred_maintenance_window = each.value.preferred_maintenance_window
   skip_final_snapshot          = each.value.skip_final_snapshot
   final_snapshot_identifier    = local.final_snapshot_identifiers[each.key]
@@ -98,6 +102,7 @@ resource "aws_rds_cluster" "this" {
     for_each = each.value.restore_to_point_in_time != null ? [each.value.restore_to_point_in_time] : []
     content {
       source_cluster_identifier  = restore_to_point_in_time.value.source_cluster_identifier
+      source_cluster_resource_id = restore_to_point_in_time.value.source_cluster_resource_id
       restore_type               = restore_to_point_in_time.value.restore_type
       use_latest_restorable_time = restore_to_point_in_time.value.use_latest_restorable_time
       restore_to_time            = restore_to_point_in_time.value.restore_to_time
@@ -121,8 +126,20 @@ resource "aws_rds_cluster" "this" {
   kms_key_id        = each.value.kms_key_id
 
   # Deletion Protection
-  deletion_protection = each.value.deletion_protection
-  apply_immediately   = each.value.apply_immediately
+  deletion_protection      = each.value.deletion_protection
+  apply_immediately        = each.value.apply_immediately
+  delete_automated_backups = each.value.delete_automated_backups
+
+  # Cluster-level monitoring (Multi-AZ DB clusters, Aurora Limitless)
+  monitoring_interval = each.value.cluster_monitoring_interval
+  monitoring_role_arn = coalesce(each.value.cluster_monitoring_interval, 0) > 0 ? try(coalesce(
+    each.value.monitoring_role_arn,
+    each.value.create_monitoring_role ? aws_iam_role.monitoring[each.key].arn : null
+  ), null) : null
+  performance_insights_enabled          = each.value.cluster_performance_insights_enabled
+  performance_insights_kms_key_id       = each.value.cluster_performance_insights_kms_key_id
+  performance_insights_retention_period = each.value.cluster_performance_insights_retention_period
+  database_insights_mode                = each.value.database_insights_mode
 
   # CloudWatch Logs (log_class configured in log group resource)
   enabled_cloudwatch_logs_exports = each.value.enabled_cloudwatch_logs_exports
@@ -135,6 +152,7 @@ resource "aws_rds_cluster" "this" {
       max_capacity             = scaling_configuration.value.max_capacity
       min_capacity             = scaling_configuration.value.min_capacity
       seconds_until_auto_pause = scaling_configuration.value.seconds_until_auto_pause
+      seconds_before_timeout   = scaling_configuration.value.seconds_before_timeout
       timeout_action           = scaling_configuration.value.timeout_action
     }
   }
@@ -143,8 +161,9 @@ resource "aws_rds_cluster" "this" {
   dynamic "serverlessv2_scaling_configuration" {
     for_each = each.value.serverlessv2_scaling_configuration != null ? [each.value.serverlessv2_scaling_configuration] : []
     content {
-      max_capacity = serverlessv2_scaling_configuration.value.max_capacity
-      min_capacity = serverlessv2_scaling_configuration.value.min_capacity
+      max_capacity             = serverlessv2_scaling_configuration.value.max_capacity
+      min_capacity             = serverlessv2_scaling_configuration.value.min_capacity
+      seconds_until_auto_pause = serverlessv2_scaling_configuration.value.seconds_until_auto_pause
     }
   }
 
@@ -163,10 +182,11 @@ resource "aws_rds_cluster" "this" {
   domain               = each.value.domain
   domain_iam_role_name = each.value.domain_iam_role_name
 
-  # Allocated Storage (for Multi-AZ DB clusters)
-  allocated_storage = each.value.allocated_storage
-  storage_type      = each.value.storage_type
-  iops              = each.value.iops
+  # Allocated Storage / instance class (for Multi-AZ DB clusters)
+  db_cluster_instance_class = each.value.db_cluster_instance_class
+  allocated_storage         = each.value.allocated_storage
+  storage_type              = each.value.storage_type
+  iops                      = each.value.iops
 
   # Replication
   replication_source_identifier = each.value.replication_source_identifier
@@ -209,10 +229,51 @@ resource "aws_rds_cluster" "this" {
 # Aurora Limitless Database - Shard Groups
 # =============================================================================
 
-# Note: Aurora Limitless Database Shard Groups are configured automatically by AWS
-# when cluster_scalability_type = "limitless" is set on the cluster.
-# There is no separate aws_rds_shard_group resource in the current AWS provider.
-# The shard_group configuration is part of the cluster resource configuration.
+resource "aws_rds_shard_group" "this" {
+  for_each = var.create ? local.shard_groups : {}
+
+  db_cluster_identifier     = aws_rds_cluster.this[each.key].id
+  db_shard_group_identifier = each.value.identifier
+  max_acu                   = each.value.max_acu
+  min_acu                   = each.value.min_acu
+  compute_redundancy        = each.value.compute_redundancy
+  publicly_accessible       = each.value.publicly_accessible
+
+  tags = merge(
+    local.cluster_tags[each.key],
+    each.value.tags,
+    {
+      Name = each.value.identifier
+    },
+    local.managed_by_tags
+  )
+
+  dynamic "timeouts" {
+    for_each = each.value.timeouts != null ? [each.value.timeouts] : []
+    content {
+      create = timeouts.value.create
+      update = timeouts.value.update
+      delete = timeouts.value.delete
+    }
+  }
+}
+
+# =============================================================================
+# Final Snapshot Identifier Suffixes (stable across plans)
+# =============================================================================
+
+resource "random_id" "cluster_snapshot" {
+  for_each = {
+    for cluster_key, cluster in var.clusters : cluster_key => cluster
+    if var.create && !cluster.skip_final_snapshot && cluster.final_snapshot_identifier_prefix == null
+  }
+
+  keepers = {
+    cluster_identifier = local.cluster_names[each.key]
+  }
+
+  byte_length = 4
+}
 
 # =============================================================================
 # Custom Endpoints
@@ -233,7 +294,8 @@ resource "aws_rds_cluster_endpoint" "this" {
     each.value.tags,
     {
       Name = each.value.identifier
-    }
+    },
+    local.managed_by_tags
   )
 
   depends_on = [

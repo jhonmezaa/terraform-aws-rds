@@ -89,7 +89,6 @@ output "cluster_master_user_secret_arns" {
   value = {
     for k, v in aws_rds_cluster.this : k => try(v.master_user_secret[0].secret_arn, null)
   }
-  sensitive = true
 }
 
 output "cluster_master_user_secret_kms_key_ids" {
@@ -242,6 +241,20 @@ output "monitoring_role_names" {
   }
 }
 
+output "db_instance_monitoring_role_arns" {
+  description = "Map of instance keys to Enhanced Monitoring IAM role ARNs created for standard RDS instances"
+  value = {
+    for k, v in aws_iam_role.instance_monitoring : k => v.arn
+  }
+}
+
+output "db_instance_cloudwatch_log_group_names" {
+  description = "Map of instance log keys (<instance>-<log type>) to CloudWatch log group names"
+  value = {
+    for k, v in aws_cloudwatch_log_group.instances : k => v.name
+  }
+}
+
 # =============================================================================
 # Activity Stream Outputs
 # =============================================================================
@@ -335,10 +348,26 @@ output "global_cluster_members" {
 # Aurora Limitless Database - Shard Group Outputs
 # =============================================================================
 
-# Note: Shard groups for Aurora Limitless are managed by cluster_scalability_type setting.
-# There is no separate aws_rds_shard_group resource in the current AWS provider.
-# Cluster configuration automatically handles shard group creation when
-# cluster_scalability_type = "limitless" is set.
+output "shard_group_arns" {
+  description = "Map of cluster keys to DB shard group ARNs (Aurora Limitless)"
+  value = {
+    for k, v in aws_rds_shard_group.this : k => v.arn
+  }
+}
+
+output "shard_group_endpoints" {
+  description = "Map of cluster keys to DB shard group connection endpoints (Aurora Limitless)"
+  value = {
+    for k, v in aws_rds_shard_group.this : k => v.endpoint
+  }
+}
+
+output "shard_group_resource_ids" {
+  description = "Map of cluster keys to DB shard group resource IDs (Aurora Limitless)"
+  value = {
+    for k, v in aws_rds_shard_group.this : k => v.db_shard_group_resource_id
+  }
+}
 
 # =============================================================================
 # RDS Proxy Outputs
@@ -398,16 +427,23 @@ output "cluster_engine_lifecycle_support" {
 }
 
 output "cluster_password_rotation_enabled" {
-  description = "Map of cluster keys indicating whether automatic password rotation is enabled"
+  description = "Map of cluster keys indicating whether automatic rotation of the RDS-managed master password is enabled"
   value = {
-    for k, v in aws_rds_cluster.this : k => try(v.rotate_master_user_password_automatically, false)
+    for k, v in aws_rds_cluster.this : k => try(aws_secretsmanager_secret_rotation.clusters[k].rotation_enabled, false)
   }
 }
 
 output "cluster_password_rotation_schedule_days" {
-  description = "Map of cluster keys to password rotation schedule in days"
+  description = "Map of cluster keys to the rotation interval in days of the RDS-managed master password (null when not rotated or rotated by schedule expression)"
   value = {
-    for k, v in aws_rds_cluster.this : k => try(v.master_user_password_rotation_automatically_after_days, null)
+    for k, v in aws_rds_cluster.this : k => try(aws_secretsmanager_secret_rotation.clusters[k].rotation_rules[0].automatically_after_days, null)
+  }
+}
+
+output "db_instance_password_rotation_enabled" {
+  description = "Map of instance keys indicating whether automatic rotation of the RDS-managed master password is enabled"
+  value = {
+    for k, v in aws_db_instance.this : k => try(aws_secretsmanager_secret_rotation.instances[k].rotation_enabled, false)
   }
 }
 
@@ -421,7 +457,7 @@ output "cloudwatch_log_groups_with_class" {
     for k, v in aws_cloudwatch_log_group.this : k => {
       name      = v.name
       arn       = v.arn
-      log_class = try(v.tags["LogClass"], "STANDARD")
+      log_class = v.log_group_class
       retention = v.retention_in_days
     }
   }
@@ -492,7 +528,6 @@ output "db_instance_master_user_secret_arns" {
   value = {
     for k, v in aws_db_instance.this : k => try(v.master_user_secret[0].secret_arn, null)
   }
-  sensitive = true
 }
 
 output "db_instance_master_usernames" {
