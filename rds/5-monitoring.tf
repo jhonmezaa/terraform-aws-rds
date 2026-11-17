@@ -8,8 +8,7 @@ resource "aws_cloudwatch_log_group" "this" {
   name              = each.value.name
   retention_in_days = each.value.retention_in_days
   kms_key_id        = each.value.kms_key_id
-  # Note: log_class (STANDARD/INFREQUENT_ACCESS) is configured via CloudWatch Logs console or API
-  # It's not a Terraform aws_cloudwatch_log_group attribute
+  log_group_class   = each.value.log_class
 
   tags = merge(
     var.tags_common,
@@ -18,7 +17,8 @@ resource "aws_cloudwatch_log_group" "this" {
       LogType  = each.value.log_type
       Cluster  = each.value.cluster_key
       LogClass = each.value.log_class # Tag for reference
-    }
+    },
+    local.managed_by_tags
   )
 }
 
@@ -29,7 +29,7 @@ resource "aws_cloudwatch_log_group" "this" {
 resource "aws_iam_role" "monitoring" {
   for_each = var.create ? local.monitoring_roles_to_create : {}
 
-  name = "${local.name_prefix}role-rds-monitoring-${var.account_name}-${var.project_name}-${each.key}"
+  name = local.monitoring_role_names[each.key]
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -47,8 +47,9 @@ resource "aws_iam_role" "monitoring" {
   tags = merge(
     var.tags_common,
     {
-      Name = "${local.name_prefix}role-rds-monitoring-${var.account_name}-${var.project_name}-${each.key}"
-    }
+      Name = local.monitoring_role_names[each.key]
+    },
+    local.managed_by_tags
   )
 }
 
@@ -69,6 +70,7 @@ resource "aws_cloudwatch_log_group" "instances" {
   name              = each.value.name
   retention_in_days = each.value.retention_in_days
   kms_key_id        = each.value.kms_key_id
+  log_group_class   = each.value.log_class
 
   tags = merge(
     var.tags_common,
@@ -76,7 +78,8 @@ resource "aws_cloudwatch_log_group" "instances" {
       Name     = each.value.name
       LogType  = each.value.log_type
       Instance = each.value.instance_key
-    }
+    },
+    local.managed_by_tags
   )
 }
 
@@ -87,7 +90,7 @@ resource "aws_cloudwatch_log_group" "instances" {
 resource "aws_iam_role" "instance_monitoring" {
   for_each = var.create ? local.instance_monitoring_roles_to_create : {}
 
-  name = "${local.name_prefix}role-rds-mon-inst-${var.account_name}-${var.project_name}-${each.key}"
+  name = local.instance_monitoring_role_names[each.key]
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -105,8 +108,9 @@ resource "aws_iam_role" "instance_monitoring" {
   tags = merge(
     var.tags_common,
     {
-      Name = "${local.name_prefix}role-rds-mon-inst-${var.account_name}-${var.project_name}-${each.key}"
-    }
+      Name = local.instance_monitoring_role_names[each.key]
+    },
+    local.managed_by_tags
   )
 }
 
@@ -133,4 +137,37 @@ resource "aws_rds_cluster_activity_stream" "this" {
   depends_on = [
     aws_rds_cluster_instance.this
   ]
+}
+
+# =============================================================================
+# Managed Master Password Rotation (Secrets Manager)
+# =============================================================================
+# Only for secrets managed by RDS (manage_master_user_password = true).
+# AWS rotates RDS-managed secrets without a Lambda function; only the schedule
+# is configured here.
+
+resource "aws_secretsmanager_secret_rotation" "clusters" {
+  for_each = var.create ? local.cluster_secret_rotations : {}
+
+  secret_id          = aws_rds_cluster.this[each.key].master_user_secret[0].secret_arn
+  rotate_immediately = each.value.master_user_password_rotate_immediately
+
+  rotation_rules {
+    automatically_after_days = each.value.master_user_password_rotation_schedule_days
+    schedule_expression      = each.value.master_user_password_rotation_schedule_expression
+    duration                 = each.value.master_user_password_rotation_duration
+  }
+}
+
+resource "aws_secretsmanager_secret_rotation" "instances" {
+  for_each = var.create ? local.instance_secret_rotations : {}
+
+  secret_id          = aws_db_instance.this[each.key].master_user_secret[0].secret_arn
+  rotate_immediately = each.value.master_user_password_rotate_immediately
+
+  rotation_rules {
+    automatically_after_days = each.value.master_user_password_rotation_schedule_days
+    schedule_expression      = each.value.master_user_password_rotation_schedule_expression
+    duration                 = each.value.master_user_password_rotation_duration
+  }
 }

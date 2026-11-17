@@ -3,9 +3,9 @@
 # =============================================================================
 
 resource "aws_iam_role" "rds_proxy" {
-  for_each = var.create ? var.db_proxies : {}
+  for_each = var.create ? local.db_proxy_configs : {}
 
-  name = "${local.name_prefix}role-rds-proxy-${var.account_name}-${var.project_name}-${each.key}"
+  name = each.value.role_name
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -23,8 +23,9 @@ resource "aws_iam_role" "rds_proxy" {
   tags = merge(
     var.tags_common,
     {
-      Name = "${local.name_prefix}role-rds-proxy-${var.account_name}-${var.project_name}-${each.key}"
-    }
+      Name = each.value.role_name
+    },
+    local.managed_by_tags
   )
 }
 
@@ -37,16 +38,31 @@ resource "aws_iam_role_policy" "rds_proxy_secrets" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "secretsmanager:GetSecretValue",
-          "secretsmanager:DescribeSecret"
-        ]
-        Resource = [each.value.secret_arn]
-      }
-    ]
+    Statement = concat(
+      [
+        {
+          Effect = "Allow"
+          Action = [
+            "secretsmanager:GetSecretValue",
+            "secretsmanager:DescribeSecret"
+          ]
+          Resource = [each.value.secret_arn]
+        }
+      ],
+      # RDS-managed secret encrypted with a customer managed KMS key
+      each.value.kms_key_id != null ? [
+        {
+          Effect   = "Allow"
+          Action   = ["kms:Decrypt"]
+          Resource = [each.value.kms_key_id]
+          Condition = {
+            StringEquals = {
+              "kms:ViaService" = "secretsmanager.${data.aws_region.current.region}.amazonaws.com"
+            }
+          }
+        }
+      ] : []
+    )
   })
 }
 
@@ -71,7 +87,7 @@ resource "aws_db_proxy" "this" {
     description               = each.value.auth.description
   }
 
-  role_arn               = each.value.role_arn
+  role_arn               = aws_iam_role.rds_proxy[each.key].arn
   vpc_subnet_ids         = each.value.vpc_subnet_ids
   vpc_security_group_ids = each.value.vpc_security_group_ids
 
@@ -85,7 +101,8 @@ resource "aws_db_proxy" "this" {
     each.value.tags,
     {
       Name = each.value.db_proxy_name
-    }
+    },
+    local.managed_by_tags
   )
 
   depends_on = [

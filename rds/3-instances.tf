@@ -31,6 +31,7 @@ resource "aws_rds_cluster_instance" "this" {
 
   # Enhanced Monitoring
   monitoring_interval = each.value.monitoring_interval
+  # Instance role -> cluster role -> role created by the module
   monitoring_role_arn = each.value.monitoring_interval > 0 ? (
     each.value.monitoring_role_arn != null ? each.value.monitoring_role_arn : (
       each.value.cluster.create_monitoring_role ? try(aws_iam_role.monitoring[each.value.cluster_key].arn, null) : null
@@ -61,7 +62,8 @@ resource "aws_rds_cluster_instance" "this" {
     each.value.tags,
     {
       Name = each.value.identifier
-    }
+    },
+    local.managed_by_tags
   )
 
   lifecycle {

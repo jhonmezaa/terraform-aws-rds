@@ -11,11 +11,31 @@ variable "create" {
 variable "account_name" {
   description = "Account name for resource naming"
   type        = string
+
+  validation {
+    condition     = length(var.account_name) >= 1 && length(var.account_name) <= 32
+    error_message = "account_name debe tener entre 1 y 32 caracteres."
+  }
+
+  validation {
+    condition     = can(regex("^[a-z0-9-]+$", var.account_name))
+    error_message = "account_name solo puede contener letras minúsculas, números y guiones."
+  }
 }
 
 variable "project_name" {
   description = "Project name for resource naming"
   type        = string
+
+  validation {
+    condition     = length(var.project_name) >= 1 && length(var.project_name) <= 32
+    error_message = "project_name debe tener entre 1 y 32 caracteres."
+  }
+
+  validation {
+    condition     = can(regex("^[a-z0-9-]+$", var.project_name))
+    error_message = "project_name solo puede contener letras minúsculas, números y guiones."
+  }
 }
 
 variable "region_prefix" {
@@ -67,6 +87,7 @@ variable "clusters" {
     master_user_password_rotation_schedule_days        = optional(number)       # Alternative to schedule_expression
     master_user_password_rotation_schedule_expression  = optional(string)       # cron() or rate() expression
     master_user_password_rotation_duration             = optional(string, "3h") # Duration window (e.g., "3h", "6h")
+    master_user_password_rotate_immediately            = optional(bool)         # Rotate as soon as the rotation is configured (AWS default: true)
 
     # Network Configuration
     vpc_security_group_ids = optional(list(string), [])
@@ -89,7 +110,8 @@ variable "clusters" {
 
     # Point-in-time Restore
     restore_to_point_in_time = optional(object({
-      source_cluster_identifier  = string
+      source_cluster_identifier  = optional(string)
+      source_cluster_resource_id = optional(string)              # Alternative to source_cluster_identifier
       restore_type               = optional(string, "full-copy") # full-copy, copy-on-write
       use_latest_restorable_time = optional(bool, true)
       restore_to_time            = optional(string)
@@ -109,10 +131,11 @@ variable "clusters" {
     kms_key_id        = optional(string)
 
     # Deletion Protection
-    deletion_protection = optional(bool, true)
-    apply_immediately   = optional(bool, false)
+    deletion_protection      = optional(bool, true)
+    apply_immediately        = optional(bool, false)
+    delete_automated_backups = optional(bool) # Delete automated backups when the cluster is deleted (AWS default: true)
 
-    # Performance Insights
+    # Performance Insights (defaults for the cluster instances)
     performance_insights_enabled          = optional(bool, false)
     performance_insights_kms_key_id       = optional(string)
     performance_insights_retention_period = optional(number, 7)
@@ -123,9 +146,16 @@ variable "clusters" {
     cloudwatch_log_group_kms_key_id        = optional(string)
     cloudwatch_log_class                   = optional(string, "STANDARD") # STANDARD or INFREQUENT_ACCESS (50% cost savings)
 
-    monitoring_interval    = optional(number, 0) # 0, 1, 5, 10, 15, 30, 60
+    monitoring_interval    = optional(number, 0) # 0, 1, 5, 10, 15, 30, 60 (default for the cluster instances)
     monitoring_role_arn    = optional(string)
     create_monitoring_role = optional(bool, true)
+
+    # Cluster-level monitoring (set on aws_rds_cluster itself; needed by Multi-AZ DB clusters and Aurora Limitless)
+    cluster_monitoring_interval                   = optional(number) # 0, 1, 5, 10, 15, 30, 60
+    cluster_performance_insights_enabled          = optional(bool)
+    cluster_performance_insights_kms_key_id       = optional(string)
+    cluster_performance_insights_retention_period = optional(number)
+    database_insights_mode                        = optional(string) # standard or advanced
 
     # Serverless v1 Configuration (engine_mode = "serverless")
     scaling_configuration = optional(object({
@@ -133,30 +163,38 @@ variable "clusters" {
       max_capacity             = optional(number, 2)
       min_capacity             = optional(number, 1)
       seconds_until_auto_pause = optional(number, 300)
+      seconds_before_timeout   = optional(number)
       timeout_action           = optional(string, "RollbackCapacityChange")
     }))
 
     # Serverless v2 Configuration (engine_mode = "provisioned")
     serverlessv2_scaling_configuration = optional(object({
-      max_capacity = number
-      min_capacity = number
+      max_capacity             = number
+      min_capacity             = number
+      seconds_until_auto_pause = optional(number) # Only when min_capacity = 0
     }))
 
     # Aurora Limitless Database (PostgreSQL 15.5+ only, requires cluster_scalability_type = "limitless")
     shard_group = optional(object({
       enabled                 = optional(bool, false)
-      max_acu                 = number # 768 to 3145728 (0.75 TB to 3072 TB)
-      min_acu                 = optional(number, 768)
+      max_acu                 = number           # Maximum capacity of the DB shard group in ACUs
+      min_acu                 = optional(number) # Minimum capacity of the DB shard group in ACUs
       publicly_accessible     = optional(bool, false)
       compute_redundancy      = optional(number, 2) # 0, 1, or 2 (0 = no compute redundancy)
-      max_allocated_storage   = optional(number)    # Maximum storage in gibibytes
-      min_allocated_storage   = optional(number)    # Minimum storage in gibibytes
-      shard_identifier_suffix = optional(string)    # Custom suffix for shard group identifier
+      max_allocated_storage   = optional(number)    # DEPRECATED: not supported by aws_rds_shard_group, ignored
+      min_allocated_storage   = optional(number)    # DEPRECATED: not supported by aws_rds_shard_group, ignored
+      shard_identifier_suffix = optional(string)    # Custom suffix for shard group identifier (default: "shard")
+      tags                    = optional(map(string), {})
+      timeouts = optional(object({
+        create = optional(string)
+        update = optional(string)
+        delete = optional(string)
+      }))
     }))
 
     # Global Database
     global_cluster_identifier      = optional(string)
-    is_primary_cluster             = optional(bool, true)
+    is_primary_cluster             = optional(bool, true) # false = secondary cluster: database_name, master_username and credentials are not sent
     enable_global_write_forwarding = optional(bool, false)
     enable_local_write_forwarding  = optional(bool, false)
 
@@ -215,7 +253,7 @@ variable "clusters" {
       # Custom endpoint for this specific instance
       custom_iam_instance_profile = optional(string)
 
-      # Network type override
+      # DEPRECATED: aws_rds_cluster_instance has no network_type argument, ignored
       network_type = optional(string)
 
       tags = optional(map(string), {})
@@ -272,10 +310,10 @@ variable "clusters" {
         timezone           = optional(string, "UTC")
         start_time         = optional(string)
         end_time           = optional(string)
-        recurrence_pattern = optional(string)
+        recurrence_pattern = optional(string) # DEPRECATED: not supported by aws_appautoscaling_scheduled_action, ignored
       })), {})
 
-      # Predictive Scaling (if supported in the future)
+      # DEPRECATED: Application Auto Scaling has no predictive scaling for Aurora, ignored
       predictive_scaling_enabled = optional(bool, false)
     }))
 
@@ -305,10 +343,11 @@ variable "clusters" {
     domain               = optional(string)
     domain_iam_role_name = optional(string)
 
-    # Allocated Storage (for Multi-AZ DB clusters)
-    allocated_storage = optional(number)
-    storage_type      = optional(string)
-    iops              = optional(number)
+    # Allocated Storage / instance class (for Multi-AZ DB clusters)
+    db_cluster_instance_class = optional(string)
+    allocated_storage         = optional(number)
+    storage_type              = optional(string)
+    iops                      = optional(number)
 
     # Replication
     replication_source_identifier = optional(string)
@@ -336,7 +375,7 @@ variable "clusters" {
       for cluster_key, cluster in var.clusters :
       !cluster.publicly_accessible
     ])
-    error_message = "Making Aurora clusters publicly accessible is a security risk. Set publicly_accessible = false."
+    error_message = "Hacer público un cluster Aurora es un riesgo de seguridad. Usa publicly_accessible = false."
   }
 
   validation {
@@ -344,7 +383,7 @@ variable "clusters" {
       for cluster_key, cluster in var.clusters :
       cluster.backup_retention_period >= 1 && cluster.backup_retention_period <= 35
     ])
-    error_message = "Backup retention period must be between 1 and 35 days."
+    error_message = "backup_retention_period del cluster debe estar entre 1 y 35 días."
   }
 
   validation {
@@ -352,7 +391,7 @@ variable "clusters" {
       for cluster_key, cluster in var.clusters :
       cluster.engine_mode == "serverless" ? cluster.scaling_configuration != null : true
     ])
-    error_message = "When using engine_mode = 'serverless', you must provide scaling_configuration."
+    error_message = "Con engine_mode = 'serverless' debes definir scaling_configuration."
   }
 
   validation {
@@ -360,7 +399,7 @@ variable "clusters" {
       for cluster_key, cluster in var.clusters :
       cluster.backtrack_window >= 0 && cluster.backtrack_window <= 259200
     ])
-    error_message = "Backtrack window must be between 0 and 259200 seconds (72 hours)."
+    error_message = "backtrack_window debe estar entre 0 y 259200 segundos (72 horas)."
   }
 
   validation {
@@ -368,7 +407,7 @@ variable "clusters" {
       for cluster_key, cluster in var.clusters :
       contains(["provisioned", "serverless", "parallelquery", "global"], cluster.engine_mode)
     ])
-    error_message = "Engine mode must be one of: provisioned, serverless, parallelquery, global."
+    error_message = "engine_mode debe ser uno de: provisioned, serverless, parallelquery, global."
   }
 
   validation {
@@ -376,15 +415,15 @@ variable "clusters" {
       for cluster_key, cluster in var.clusters :
       contains(["standard", "limitless"], cluster.cluster_scalability_type)
     ])
-    error_message = "Cluster scalability type must be either 'standard' or 'limitless'."
+    error_message = "cluster_scalability_type debe ser 'standard' o 'limitless'."
   }
 
   validation {
     condition = alltrue([
       for cluster_key, cluster in var.clusters :
-      cluster.cluster_scalability_type == "limitless" ? can(cluster.shard_group) : true
+      cluster.cluster_scalability_type == "limitless" ? try(cluster.shard_group.enabled, false) : true
     ])
-    error_message = "When cluster_scalability_type = 'limitless', shard_group configuration must be provided."
+    error_message = "Con cluster_scalability_type = 'limitless' debes definir shard_group."
   }
 
   validation {
@@ -392,17 +431,38 @@ variable "clusters" {
       for cluster_key, cluster in var.clusters :
       contains(["STANDARD", "INFREQUENT_ACCESS"], cluster.cloudwatch_log_class)
     ])
-    error_message = "CloudWatch log class must be either 'STANDARD' or 'INFREQUENT_ACCESS'."
+    error_message = "cloudwatch_log_class debe ser 'STANDARD' o 'INFREQUENT_ACCESS'."
   }
 
   validation {
     condition = alltrue([
       for cluster_key, cluster in var.clusters :
       try(cluster.shard_group.enabled, false) == false || (
-        try(cluster.shard_group.max_acu, 0) >= 768 && try(cluster.shard_group.max_acu, 0) <= 3145728
+        cluster.shard_group.max_acu > 0 && cluster.shard_group.max_acu >= coalesce(cluster.shard_group.min_acu, 0)
       )
     ])
-    error_message = "Shard group max_acu must be between 768 and 3145728 (0.75 TB to 3072 TB) when shard_group is enabled."
+    error_message = "shard_group.max_acu debe ser mayor que 0 y mayor o igual que min_acu."
+  }
+
+  validation {
+    condition = alltrue([
+      for cluster_key, cluster in var.clusters :
+      cluster.cluster_scalability_type == "limitless" || !try(cluster.shard_group.enabled, false)
+    ])
+    error_message = "shard_group solo se puede habilitar con cluster_scalability_type = 'limitless'."
+  }
+
+  validation {
+    condition = alltrue([
+      for cluster_key, cluster in var.clusters :
+      !cluster.manage_master_user_password_rotation_automatically || (
+        cluster.manage_master_user_password && (
+          cluster.master_user_password_rotation_schedule_days != null ||
+          cluster.master_user_password_rotation_schedule_expression != null
+        )
+      )
+    ])
+    error_message = "La rotación automática requiere manage_master_user_password = true y master_user_password_rotation_schedule_days o master_user_password_rotation_schedule_expression."
   }
 
   default = {}
@@ -444,6 +504,13 @@ variable "instances" {
     master_user_secret_kms_key_id       = optional(string)
     iam_database_authentication_enabled = optional(bool, false)
 
+    # Password Rotation (when manage_master_user_password = true)
+    manage_master_user_password_rotation_automatically = optional(bool, false)
+    master_user_password_rotation_schedule_days        = optional(number)
+    master_user_password_rotation_schedule_expression  = optional(string)
+    master_user_password_rotation_duration             = optional(string, "3h")
+    master_user_password_rotate_immediately            = optional(bool)
+
     # Network Configuration
     vpc_security_group_ids = optional(list(string), [])
     subnet_ids             = optional(list(string), [])
@@ -453,6 +520,12 @@ variable "instances" {
     publicly_accessible    = optional(bool, false)
     availability_zone      = optional(string)
     multi_az               = optional(bool, false)
+
+    # Engine extras
+    engine_lifecycle_support = optional(string) # open-source-rds-extended-support, open-source-rds-extended-support-disabled
+    timezone                 = optional(string) # SQL Server only
+    dedicated_log_volume     = optional(bool)
+    database_insights_mode   = optional(string) # standard or advanced
 
     # Backup & Maintenance
     backup_retention_period     = optional(number, 7)
@@ -498,6 +571,7 @@ variable "instances" {
     enabled_cloudwatch_logs_exports        = optional(list(string), [])
     cloudwatch_log_group_retention_in_days = optional(number, 7)
     cloudwatch_log_group_kms_key_id        = optional(string)
+    cloudwatch_log_class                   = optional(string, "STANDARD") # STANDARD or INFREQUENT_ACCESS
 
     # Parameter Group
     parameter_group = optional(object({
@@ -574,7 +648,7 @@ variable "instances" {
       contains(["postgres", "mysql", "mariadb", "oracle-ee", "oracle-se2",
       "sqlserver-ee", "sqlserver-se", "sqlserver-ex", "sqlserver-web"], inst.engine)
     ])
-    error_message = "Engine must be one of: postgres, mysql, mariadb, oracle-ee, oracle-se2, sqlserver-ee, sqlserver-se, sqlserver-ex, sqlserver-web."
+    error_message = "engine debe ser uno de: postgres, mysql, mariadb, oracle-ee, oracle-se2, sqlserver-ee, sqlserver-se, sqlserver-ex, sqlserver-web."
   }
 
   validation {
@@ -582,7 +656,7 @@ variable "instances" {
       for inst_key, inst in var.instances :
       contains(["gp2", "gp3", "io1", "io2", "standard"], inst.storage_type)
     ])
-    error_message = "Storage type must be one of: gp2, gp3, io1, io2, standard."
+    error_message = "storage_type debe ser uno de: gp2, gp3, io1, io2, standard."
   }
 
   validation {
@@ -590,7 +664,36 @@ variable "instances" {
       for inst_key, inst in var.instances :
       inst.backup_retention_period >= 0 && inst.backup_retention_period <= 35
     ])
-    error_message = "Backup retention period must be between 0 and 35 days."
+    error_message = "backup_retention_period de la instancia debe estar entre 0 y 35 días."
+  }
+
+  validation {
+    condition = alltrue([
+      for inst_key, inst in var.instances :
+      contains(["STANDARD", "INFREQUENT_ACCESS"], inst.cloudwatch_log_class)
+    ])
+    error_message = "cloudwatch_log_class debe ser 'STANDARD' o 'INFREQUENT_ACCESS'."
+  }
+
+  validation {
+    condition = alltrue([
+      for inst_key, inst in var.instances :
+      !inst.manage_master_user_password_rotation_automatically || (
+        inst.manage_master_user_password && inst.replicate_source_db == null && (
+          inst.master_user_password_rotation_schedule_days != null ||
+          inst.master_user_password_rotation_schedule_expression != null
+        )
+      )
+    ])
+    error_message = "La rotación automática requiere manage_master_user_password = true, no ser réplica y master_user_password_rotation_schedule_days o master_user_password_rotation_schedule_expression."
+  }
+
+  validation {
+    condition = alltrue([
+      for inst_key, inst in var.instances :
+      inst.replicate_source_db == null || !startswith(coalesce(inst.replicate_source_db, "-"), "self:") || contains(keys(var.instances), trimprefix(coalesce(inst.replicate_source_db, "-"), "self:"))
+    ])
+    error_message = "replicate_source_db = \"self:<key>\" debe apuntar a una clave existente de instances."
   }
 }
 
@@ -626,7 +729,7 @@ variable "global_clusters" {
       for gc_key, gc in var.global_clusters :
       gc.engine != null ? contains(["aurora-mysql", "aurora-postgresql"], gc.engine) : true
     ])
-    error_message = "Global cluster engine must be either 'aurora-mysql' or 'aurora-postgresql'."
+    error_message = "El engine del global cluster debe ser 'aurora-mysql' o 'aurora-postgresql'."
   }
 }
 
@@ -674,7 +777,7 @@ variable "db_proxies" {
       for proxy_key, proxy in var.db_proxies :
       contains(["MYSQL", "POSTGRESQL"], proxy.engine_family)
     ])
-    error_message = "RDS Proxy engine_family must be either 'MYSQL' or 'POSTGRESQL'."
+    error_message = "engine_family del RDS Proxy debe ser 'MYSQL' o 'POSTGRESQL'."
   }
 
   validation {
@@ -682,7 +785,7 @@ variable "db_proxies" {
       for proxy_key, proxy in var.db_proxies :
       proxy.max_connections_percent >= 1 && proxy.max_connections_percent <= 100
     ])
-    error_message = "RDS Proxy max_connections_percent must be between 1 and 100."
+    error_message = "max_connections_percent del RDS Proxy debe estar entre 1 y 100."
   }
 
   validation {
@@ -690,7 +793,7 @@ variable "db_proxies" {
       for proxy_key, proxy in var.db_proxies :
       (proxy.cluster_key != null) != (proxy.instance_key != null)
     ])
-    error_message = "Each RDS Proxy must reference exactly one of cluster_key or instance_key, not both."
+    error_message = "Cada RDS Proxy debe referenciar exactamente uno de cluster_key o instance_key, no ambos."
   }
 }
 
@@ -699,19 +802,19 @@ variable "db_proxies" {
 # =============================================================================
 
 variable "enable_blue_green_deployments" {
-  description = "Enable blue/green deployment strategy for zero-downtime updates"
+  description = "DEPRECATED: not used by the module, kept for backward compatibility and ignored. Enable blue/green deployment strategy for zero-downtime updates"
   type        = bool
   default     = false
 }
 
 variable "blue_green_update_timeout" {
-  description = "Timeout for blue/green deployment updates (in minutes)"
+  description = "DEPRECATED: not used by the module, kept for backward compatibility and ignored. Timeout for blue/green deployment updates (in minutes)"
   type        = number
   default     = 60
 
   validation {
     condition     = var.blue_green_update_timeout >= 15 && var.blue_green_update_timeout <= 720
-    error_message = "Blue/green update timeout must be between 15 and 720 minutes."
+    error_message = "blue_green_update_timeout debe estar entre 15 y 720 minutos."
   }
 }
 
@@ -720,13 +823,13 @@ variable "blue_green_update_timeout" {
 # =============================================================================
 
 variable "enable_cross_region_backups" {
-  description = "Enable automated backups to another AWS region for disaster recovery"
+  description = "DEPRECATED: not used by the module, kept for backward compatibility and ignored. Enable automated backups to another AWS region for disaster recovery"
   type        = bool
   default     = false
 }
 
 variable "cross_region_backup_config" {
-  description = "Configuration for cross-region automated backups"
+  description = "DEPRECATED: not used by the module, kept for backward compatibility and ignored. Configuration for cross-region automated backups"
   type = object({
     destination_region = string
     kms_key_id         = optional(string)
@@ -742,7 +845,7 @@ variable "cross_region_backup_config" {
 # =============================================================================
 
 variable "enable_query_editor" {
-  description = "Enable RDS Query Editor for Serverless v2 clusters (requires Data API)"
+  description = "DEPRECATED: not used by the module, kept for backward compatibility and ignored. Enable RDS Query Editor for Serverless v2 clusters (requires Data API)"
   type        = bool
   default     = false
 }
@@ -752,13 +855,13 @@ variable "enable_query_editor" {
 # =============================================================================
 
 variable "enable_encryption_in_transit" {
-  description = "Enforce SSL/TLS for all connections (requires certificate validation)"
+  description = "DEPRECATED: not used by the module, kept for backward compatibility and ignored. Enforce SSL/TLS for all connections (requires certificate validation)"
   type        = bool
   default     = true
 }
 
 variable "tls_cipher_suites" {
-  description = "List of allowed TLS cipher suites for encrypted connections"
+  description = "DEPRECATED: not used by the module, kept for backward compatibility and ignored. List of allowed TLS cipher suites for encrypted connections"
   type        = list(string)
   default     = []
 }
@@ -768,13 +871,13 @@ variable "tls_cipher_suites" {
 # =============================================================================
 
 variable "enable_cost_optimization" {
-  description = "Enable cost optimization features (auto-pause for dev/test, Graviton instances, etc.)"
+  description = "DEPRECATED: not used by the module, kept for backward compatibility and ignored. Enable cost optimization features (auto-pause for dev/test, Graviton instances, etc.)"
   type        = bool
   default     = false
 }
 
 variable "cost_optimization_config" {
-  description = "Cost optimization configuration"
+  description = "DEPRECATED: not used by the module, kept for backward compatibility and ignored. Cost optimization configuration"
   type = object({
     prefer_graviton_instances          = optional(bool, true)  # Use Graviton2/3 instance types when available
     enable_storage_autoscaling         = optional(bool, false) # For Multi-AZ DB clusters
@@ -789,24 +892,24 @@ variable "cost_optimization_config" {
 # =============================================================================
 
 variable "enable_deletion_protection_override" {
-  description = "Allow overriding deletion protection for emergency situations (not recommended for production)"
+  description = "DEPRECATED: not used by the module, kept for backward compatibility and ignored. Allow overriding deletion protection for emergency situations (not recommended for production)"
   type        = bool
   default     = false
 }
 
 variable "audit_log_retention_days" {
-  description = "Retention period for audit logs in CloudWatch (if Activity Streams enabled)"
+  description = "DEPRECATED: not used by the module, kept for backward compatibility and ignored. Retention period for audit logs in CloudWatch (if Activity Streams enabled)"
   type        = number
   default     = 90
 
   validation {
     condition     = var.audit_log_retention_days >= 1 && var.audit_log_retention_days <= 3653
-    error_message = "Audit log retention must be between 1 and 3653 days."
+    error_message = "audit_log_retention_days debe estar entre 1 y 3653 días."
   }
 }
 
 variable "enable_compliance_mode" {
-  description = "Enable compliance mode with strict security settings (encryption, deletion protection, audit logs)"
+  description = "DEPRECATED: not used by the module, kept for backward compatibility and ignored. Enable compliance mode with strict security settings (encryption, deletion protection, audit logs)"
   type        = bool
   default     = false
 }
@@ -816,13 +919,13 @@ variable "enable_compliance_mode" {
 # =============================================================================
 
 variable "enable_experimental_features" {
-  description = "Enable experimental/preview features (use with caution in production)"
+  description = "DEPRECATED: not used by the module, kept for backward compatibility and ignored. Enable experimental/preview features (use with caution in production)"
   type        = bool
   default     = false
 }
 
 variable "experimental_config" {
-  description = "Configuration for experimental features"
+  description = "DEPRECATED: not used by the module, kept for backward compatibility and ignored. Configuration for experimental features"
   type = object({
     enable_aurora_ml          = optional(bool, false) # Aurora ML for SageMaker/Comprehend integration
     enable_rds_custom         = optional(bool, false) # RDS Custom for OS/DB customization
