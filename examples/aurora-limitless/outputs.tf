@@ -33,27 +33,17 @@ output "cluster_scalability_type" {
 }
 
 # =============================================================================
-# Secrets Manager Outputs
+# Shard Group Outputs
 # =============================================================================
 
-output "master_user_secret_arn" {
-  description = "ARN of the Secrets Manager secret containing master user credentials"
-  value       = module.aurora_limitless.cluster_master_user_secret_arns["limitless"]
-  sensitive   = true
+output "shard_group_arn" {
+  description = "ARN of the DB shard group"
+  value       = module.aurora_limitless.shard_group_arns["limitless"]
 }
 
-# =============================================================================
-# Instance Outputs
-# =============================================================================
-
-output "instance_ids" {
-  description = "Map of instance identifiers"
-  value       = module.aurora_limitless.cluster_instance_ids
-}
-
-output "instance_endpoints" {
-  description = "Map of instance endpoints"
-  value       = module.aurora_limitless.cluster_instance_endpoints
+output "shard_group_endpoint" {
+  description = "Connection endpoint of the DB shard group"
+  value       = module.aurora_limitless.shard_group_endpoints["limitless"]
 }
 
 # =============================================================================
@@ -68,7 +58,7 @@ output "connection_info" {
   Aurora Limitless Database Created!
   ==========================================
 
-  Cluster Endpoint: ${module.aurora_limitless.cluster_endpoints["limitless"]}
+  Shard Group Endpoint: ${module.aurora_limitless.shard_group_endpoints["limitless"]}
   Port: ${module.aurora_limitless.cluster_ports["limitless"]}
   Database: limitless_db
   Scalability: ${module.aurora_limitless.cluster_scalability_types["limitless"]}
@@ -76,15 +66,11 @@ output "connection_info" {
   HOW TO CONNECT:
   --------------------
 
-  1. Retrieve the master password from Secrets Manager:
+  1. Use the master password passed in var.db_password.
 
-     aws secretsmanager get-secret-value \
-       --secret-id ${module.aurora_limitless.cluster_master_user_secret_arns["limitless"]} \
-       --query SecretString --output text | jq -r .password
+  2. Connect to the shard group endpoint using psql:
 
-  2. Connect using psql:
-
-     psql -h ${module.aurora_limitless.cluster_endpoints["limitless"]} \
+     psql -h ${module.aurora_limitless.shard_group_endpoints["limitless"]} \
           -p ${module.aurora_limitless.cluster_ports["limitless"]} \
           -U ${var.db_username} \
           -d limitless_db

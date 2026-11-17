@@ -19,14 +19,11 @@ vpc_security_group_ids = ["sg-xxxxx"]                   # Security group allowin
 
 # Database Configuration
 db_username    = "limitless_admin"
-engine_version = "15.5" # PostgreSQL 15.5+ required for Limitless
-
-# Instance Configuration
-instance_class = "db.r6g.xlarge" # Minimum recommended for Limitless
-instance_count = 2               # Number of instances
+db_password    = "change-me-please" # Limitless does not support RDS-managed passwords
+engine_version = "16.9-limitless"   # Limitless engine versions end in -limitless
 
 # Aurora Limitless Shard Group Configuration
-max_acu            = 1536 # Maximum ACU (768 to 3145728)
+max_acu            = 1536 # Maximum shard group capacity in ACUs
 min_acu            = 768  # Minimum ACU
 compute_redundancy = 2    # High availability (0, 1, or 2)
 
@@ -41,9 +38,9 @@ tags = {
 # =============================================================================
 # IMPORTANT NOTES:
 # =============================================================================
-# 1. Aurora Limitless requires PostgreSQL 15.5 or higher
-# 2. Minimum instance class: db.r6g.xlarge or equivalent
-# 3. ACU range: 768 (0.75 TB) to 3145728 (3072 TB)
+# 1. Aurora Limitless requires a "-limitless" Aurora PostgreSQL engine version
+# 2. The cluster has no DB instances: traffic goes through the shard group endpoint
+# 3. Managed master passwords (Secrets Manager) are not supported
 # 4. compute_redundancy = 2 is recommended for production (high availability)
 # 5. Limitless is designed for workloads requiring horizontal scalability
 # =============================================================================

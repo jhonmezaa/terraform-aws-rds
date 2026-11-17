@@ -56,6 +56,12 @@ variable "db_username" {
   default     = "dbadmin"
 }
 
+variable "db_password" {
+  description = "Master password of the global database (managed passwords are not supported by Aurora global databases)"
+  type        = string
+  sensitive   = true
+}
+
 variable "instance_class" {
   description = "Instance class for Aurora instances"
   type        = string

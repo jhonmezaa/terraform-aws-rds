@@ -50,12 +50,12 @@ module "aurora_postgresql" {
       # BACKUP CONFIGURATION
       # =======================================================================
 
-      backup_retention_period      = var.backup_retention_period
-      preferred_backup_window      = var.preferred_backup_window
-      preferred_maintenance_window = var.preferred_maintenance_window
-      skip_final_snapshot          = !var.deletion_protection
-      final_snapshot_identifier    = "${var.account_name}-${var.project_name}-final-snapshot"
-      copy_tags_to_snapshot        = true
+      backup_retention_period          = var.backup_retention_period
+      preferred_backup_window          = var.preferred_backup_window
+      preferred_maintenance_window     = var.preferred_maintenance_window
+      skip_final_snapshot              = !var.deletion_protection
+      final_snapshot_identifier_prefix = "${var.account_name}-${var.project_name}-final-snapshot"
+      copy_tags_to_snapshot            = true
 
       # =======================================================================
       # ENCRYPTION

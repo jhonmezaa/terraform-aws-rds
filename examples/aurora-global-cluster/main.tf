@@ -46,9 +46,11 @@ module "aurora_primary" {
       # Database
       database_name = var.database_name
 
-      # Credentials (AWS Secrets Manager)
+      # Credentials: Aurora global databases do not support RDS-managed
+      # master passwords (Secrets Manager), so the password is passed explicitly
       master_username             = var.db_username
-      manage_master_user_password = true
+      manage_master_user_password = false
+      master_password             = var.db_password
 
       # Network
       vpc_security_group_ids = var.primary_vpc_security_group_ids

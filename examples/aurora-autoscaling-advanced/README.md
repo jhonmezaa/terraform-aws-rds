@@ -450,7 +450,7 @@ aws application-autoscaling describe-scalable-targets \
 ```
 
 **Solution**:
-- Ensure `autoscaling_enabled = true`
+- Ensure `autoscaling.enabled = true`
 - Verify metrics exceed target values
 - Check max_capacity not reached
 - Review cooldown periods
