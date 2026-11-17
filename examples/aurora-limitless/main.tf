@@ -2,7 +2,7 @@
 # Aurora Limitless Database Example
 # =============================================================================
 # This example demonstrates Aurora Limitless Database for horizontal scaling
-# with PostgreSQL 15.5+
+# (Aurora PostgreSQL "-limitless" engine versions)
 # =============================================================================
 
 module "aurora_limitless" {
@@ -13,18 +13,19 @@ module "aurora_limitless" {
 
   clusters = {
     limitless = {
-      # Engine Configuration - PostgreSQL 15.5+ required for Limitless
+      # Engine Configuration - Limitless engine versions end in "-limitless"
       engine                   = "aurora-postgresql"
       engine_version           = var.engine_version
-      engine_mode              = "provisioned"
-      cluster_scalability_type = "limitless" # Enable Aurora Limitless Database
+      storage_type             = "aurora-iopt1"
+      cluster_scalability_type = "limitless" # Enable Aurora Limitless Database (engine_mode is sent empty)
 
       # Database Configuration
       database_name = "limitless_db"
 
-      # Credentials (AWS Secrets Manager managed)
+      # Credentials: Aurora Limitless does not support RDS-managed master passwords
       master_username             = var.db_username
-      manage_master_user_password = true
+      manage_master_user_password = false
+      master_password             = var.db_password
 
       # Network Configuration
       vpc_security_group_ids = var.vpc_security_group_ids
@@ -32,11 +33,17 @@ module "aurora_limitless" {
       create_subnet_group    = true
       publicly_accessible    = false
 
-      # Aurora Limitless Shard Group Configuration
+      # Aurora Limitless requires Enhanced Monitoring and Performance Insights
+      # at cluster level (the monitoring IAM role is created by the module)
+      cluster_monitoring_interval                   = 30
+      cluster_performance_insights_enabled          = true
+      cluster_performance_insights_retention_period = 31
+
+      # Aurora Limitless Shard Group (aws_rds_shard_group)
       shard_group = {
         enabled            = true
-        max_acu            = var.max_acu            # 768 to 3145728 (0.75 TB to 3072 TB)
-        min_acu            = var.min_acu            # Minimum capacity
+        max_acu            = var.max_acu
+        min_acu            = var.min_acu
         compute_redundancy = var.compute_redundancy # 0, 1, or 2 (2 = high availability)
       }
 
@@ -49,28 +56,13 @@ module "aurora_limitless" {
 
       # Deletion Protection - Enable in production
       deletion_protection = false
-
-      # Performance Insights
-      performance_insights_enabled          = true
-      performance_insights_retention_period = 7
+      apply_immediately   = true
 
       # CloudWatch Logs
       enabled_cloudwatch_logs_exports = ["postgresql"]
       cloudwatch_log_class            = "STANDARD"
 
-      # Cluster Instances
-      instances = {
-        for i in range(var.instance_count) :
-        "instance-${i + 1}" => {
-          instance_class      = var.instance_class
-          publicly_accessible = false
-          promotion_tier      = i
-
-          # Performance Insights per instance
-          performance_insights_enabled          = true
-          performance_insights_retention_period = 7
-        }
-      }
+      # No cluster instances: a Limitless cluster serves traffic through its shard group
 
       # Tags
       tags = var.tags

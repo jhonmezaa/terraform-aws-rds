@@ -7,7 +7,7 @@ A comprehensive, production-ready Terraform module for deploying AWS RDS instanc
 ### Core Capabilities
 
 - ✅ **Aurora & RDS Support**: Aurora clusters (PostgreSQL/MySQL) and RDS instances
-- ✅ **Aurora Limitless**: Horizontal scaling beyond single-node limits (PostgreSQL 15.5+)
+- ✅ **Aurora Limitless**: Horizontal scaling with a DB shard group (`aws_rds_shard_group`)
 - ✅ **Global Clusters**: Multi-region disaster recovery with sub-second replication
 - ✅ **Serverless v2**: Auto-scaling Aurora with ACU-based capacity
 - ✅ **RDS Proxy**: Connection pooling and management
@@ -15,7 +15,7 @@ A comprehensive, production-ready Terraform module for deploying AWS RDS instanc
 
 ### Security & Compliance
 
-- ✅ **Secrets Manager Integration**: Automatic password management
+- ✅ **Secrets Manager Integration**: RDS-managed master passwords with optional scheduled rotation
 - ✅ **Encryption**: Storage encryption enabled by default
 - ✅ **IAM Authentication**: Database IAM authentication support
 - ✅ **Activity Streams**: Database activity monitoring for compliance
@@ -50,17 +50,17 @@ The module is organized with numbered files for logical ordering:
 ```
 rds/
 ├── 0-versions.tf          # Provider versions
-├── 1-variables.tf         # Input variables (90+ variables)
-├── 2-cluster.tf           # Aurora clusters & global clusters
+├── 1-variables.tf         # Input variables (24 top-level variables, 14 of them deprecated no-ops)
+├── 2-cluster.tf           # Aurora clusters, global clusters, shard groups, endpoints
 ├── 3-db-instances.tf      # Standard RDS instances, subnet groups, option groups
 ├── 3-instances.tf         # Aurora cluster instances
 ├── 4-parameter-groups.tf  # Parameter groups (cluster + instance)
 ├── 5-data.tf              # Data sources
-├── 5-monitoring.tf        # CloudWatch & IAM for monitoring
+├── 5-monitoring.tf        # CloudWatch log groups, monitoring IAM roles, activity streams, secret rotation
 ├── 6-autoscaling.tf       # Advanced autoscaling policies
 ├── 7-proxies.tf           # RDS Proxy configuration (Aurora + RDS)
 ├── 8-locals.tf            # Local values & data processing
-└── 9-outputs.tf           # Outputs (70 outputs)
+└── 9-outputs.tf           # Outputs (75 outputs)
 ```
 
 ## 🚀 Quick Start
@@ -69,7 +69,7 @@ rds/
 
 ```hcl
 module "rds" {
-  source = "./rds"
+  source = "github.com/jhonmezaa/terraform-aws-rds//rds?ref=v3.1.0"
 
   account_name = "prod"
   project_name = "myapp"
@@ -125,7 +125,7 @@ module "rds" {
 >
 > ```hcl
 > module "rds" {
->   source            = "./rds"
+>   source            = "github.com/jhonmezaa/terraform-aws-rds//rds?ref=v3.1.0"
 >   use_region_prefix = false  # No region prefix in any resource name
 >   # ...
 > }
@@ -148,7 +148,7 @@ module "rds" {
 
 ```hcl
 module "aurora" {
-  source = "./rds"
+  source = "github.com/jhonmezaa/terraform-aws-rds//rds?ref=v3.1.0"
 
   account_name = "prod"
   project_name = "myapp"
@@ -205,7 +205,7 @@ module "aurora" {
 
 ```hcl
 module "aurora_limitless" {
-  source = "./rds"
+  source = "github.com/jhonmezaa/terraform-aws-rds//rds?ref=v3.1.0"
 
   account_name = "prod"
   project_name = "limitless"
@@ -213,18 +213,27 @@ module "aurora_limitless" {
   clusters = {
     limitless = {
       engine                   = "aurora-postgresql"
-      engine_version           = "15.5"  # Required for Limitless
-      cluster_scalability_type = "limitless"
+      engine_version           = "16.9-limitless" # Limitless engine versions end in -limitless
+      storage_type             = "aurora-iopt1"
+      cluster_scalability_type = "limitless"      # engine_mode is sent empty automatically
 
-      # Shard Group Configuration
+      # Limitless does not support RDS-managed passwords
+      master_username             = "root"
+      manage_master_user_password = false
+      master_password             = var.db_password
+
+      # Required by Limitless at cluster level
+      cluster_monitoring_interval          = 30
+      cluster_performance_insights_enabled = true
+
+      # Shard Group (aws_rds_shard_group)
       shard_group = {
         enabled            = true
-        max_acu            = 1536  # 0.75 TB to 3 PB
-        min_acu            = 768
-        compute_redundancy = 2      # High availability
+        max_acu            = 768
+        compute_redundancy = 2 # High availability
       }
 
-      # ... rest of configuration
+      # No instances: connect through the shard group endpoint (shard_group_endpoints output)
     }
   }
 }
@@ -235,11 +244,14 @@ module "aurora_limitless" {
 ```hcl
 # Primary Region
 module "aurora_primary" {
-  source = "./rds"
+  source = "github.com/jhonmezaa/terraform-aws-rds//rds?ref=v3.1.0"
 
   providers = {
     aws = aws.primary
   }
+
+  account_name = "prod"
+  project_name = "myapp"
 
   global_clusters = {
     main = {
@@ -253,9 +265,14 @@ module "aurora_primary" {
     primary = {
       engine                        = "aurora-postgresql"
       engine_version                = "15.4"
-      global_cluster_identifier     = "myapp-global"
-      is_primary_cluster            = true
+      global_cluster_identifier      = "myapp-global"
+      is_primary_cluster             = true
       enable_global_write_forwarding = false
+
+      # Global databases do not support RDS-managed passwords
+      master_username             = "dbadmin"
+      manage_master_user_password = false
+      master_password             = var.db_password
 
       # ... rest of configuration
     }
@@ -264,18 +281,21 @@ module "aurora_primary" {
 
 # Secondary Region
 module "aurora_secondary" {
-  source = "./rds"
+  source = "github.com/jhonmezaa/terraform-aws-rds//rds?ref=v3.1.0"
 
   providers = {
     aws = aws.secondary
   }
+
+  account_name = "prod"
+  project_name = "myapp"
 
   clusters = {
     secondary = {
       engine                         = "aurora-postgresql"
       engine_version                 = "15.4"
       global_cluster_identifier      = "myapp-global"
-      is_primary_cluster             = false
+      is_primary_cluster             = false # database_name and credentials are not sent
       enable_global_write_forwarding = true  # Forward writes to primary
 
       # ... rest of configuration
@@ -290,44 +310,46 @@ module "aurora_secondary" {
 
 ```hcl
 module "aurora_autoscaling" {
-  source = "./rds"
+  source = "github.com/jhonmezaa/terraform-aws-rds//rds?ref=v3.1.0"
 
   clusters = {
     main = {
       # ... base configuration ...
 
       # Autoscaling Configuration
-      autoscaling_enabled      = true
-      autoscaling_min_capacity = 1
-      autoscaling_max_capacity = 5
+      autoscaling = {
+        enabled      = true
+        min_capacity = 1
+        max_capacity = 5
 
-      # Target Tracking Policies
-      autoscaling_target_tracking_policies = {
-        cpu = {
-          target_metric      = "RDSReaderAverageCPUUtilization"
-          target_value       = 70
-          scale_in_cooldown  = 300
-          scale_out_cooldown = 60
+        # Target Tracking Policies
+        target_tracking_policies = {
+          cpu = {
+            target_metric      = "RDSReaderAverageCPUUtilization"
+            target_value       = 70
+            scale_in_cooldown  = 300
+            scale_out_cooldown = 60
+          }
+          connections = {
+            target_metric      = "RDSReaderAverageDatabaseConnections"
+            target_value       = 500
+            scale_in_cooldown  = 600
+            scale_out_cooldown = 120
+          }
         }
-        connections = {
-          target_metric      = "RDSReaderAverageDatabaseConnections"
-          target_value       = 500
-          scale_in_cooldown  = 600
-          scale_out_cooldown = 120
-        }
-      }
 
-      # Scheduled Actions
-      autoscaling_scheduled_actions = {
-        business_hours_start = {
-          schedule     = "cron(0 8 ? * MON-FRI *)"
-          min_capacity = 3
-          max_capacity = 10
-        }
-        business_hours_end = {
-          schedule     = "cron(0 18 ? * MON-FRI *)"
-          min_capacity = 1
-          max_capacity = 3
+        # Scheduled Actions
+        scheduled_actions = {
+          business_hours_start = {
+            schedule     = "cron(0 8 ? * MON-FRI *)"
+            min_capacity = 3
+            max_capacity = 10
+          }
+          business_hours_end = {
+            schedule     = "cron(0 18 ? * MON-FRI *)"
+            min_capacity = 1
+            max_capacity = 3
+          }
         }
       }
     }
@@ -339,7 +361,7 @@ module "aurora_autoscaling" {
 
 ```hcl
 module "aurora_with_proxy" {
-  source = "./rds"
+  source = "github.com/jhonmezaa/terraform-aws-rds//rds?ref=v3.1.0"
 
   clusters = {
     main = {
@@ -374,22 +396,16 @@ Complete, production-ready examples are available in the [examples](./examples) 
 | --------------------------------------------------------------------- | ------------------------- | ---------------------------------------------------- |
 | [rds-postgresql](./examples/rds-postgresql)                           | Standard RDS PostgreSQL   | Multi-AZ, gp3 storage autoscaling, read replica      |
 | [rds-mysql](./examples/rds-mysql)                                     | Standard RDS MySQL        | Multi-AZ, option group, audit plugin, Blue/Green     |
-| [aurora-limitless](./examples/aurora-limitless)                       | Aurora Limitless Database | Horizontal scaling, ACU-based, 768 ACU to 3 PB       |
+| [aurora-cluster](./examples/aurora-cluster)                           | Aurora MySQL cluster      | Writer + 2 readers, enhanced monitoring, autoscaling |
+| [aurora-provisioned](./examples/aurora-provisioned)                   | Aurora PostgreSQL         | Provisioned instances, custom endpoints, autoscaling |
+| [aurora-serverless-v2](./examples/aurora-serverless-v2)               | Aurora Serverless v2      | ACU-based scaling, writer + reader                   |
+| [aurora-limitless](./examples/aurora-limitless)                       | Aurora Limitless Database | Shard group, cluster-level monitoring, no instances  |
 | [aurora-global-cluster](./examples/aurora-global-cluster)             | Multi-region DR           | Cross-region replication, write forwarding, failover |
 | [aurora-autoscaling-advanced](./examples/aurora-autoscaling-advanced) | Advanced Autoscaling      | Target tracking, step scaling, scheduled actions     |
 | [aurora-mysql-advanced](./examples/aurora-mysql-advanced)             | MySQL Features            | Backtrack, binary logs, audit logging                |
 | [aurora-postgresql-advanced](./examples/aurora-postgresql-advanced)   | PostgreSQL Features       | pgvector, PostGIS, logical replication, JSONB        |
 
-Each example includes:
-
-- Complete Terraform configuration
-- terraform.tfvars.example
-- Comprehensive README with:
-  - Architecture diagrams
-  - Deployment instructions
-  - Usage examples
-  - Monitoring guidance
-  - Troubleshooting tips
+Each example includes `main.tf`, `variables.tf`, `outputs.tf`, `versions.tf` and a `README.md`; some also ship a `terraform.tfvars.example`.
 
 ## 📥 Variables
 
@@ -397,8 +413,10 @@ Each example includes:
 
 | Name              | Description                                 | Type          | Default  |
 | ----------------- | ------------------------------------------- | ------------- | -------- |
-| account_name      | Account name for resource naming            | `string`      | required |
-| project_name      | Project name for resource naming            | `string`      | required |
+| account_name      | Account name for resource naming (1-32 chars, `^[a-z0-9-]+$`) | `string` | required |
+| project_name      | Project name for resource naming (1-32 chars, `^[a-z0-9-]+$`) | `string` | required |
+| create            | Master toggle: create all resources         | `bool`        | `true`   |
+| tags_common       | Tags applied to every resource              | `map(string)` | `{}`     |
 | use_region_prefix | Include region prefix in resource names     | `bool`        | `true`   |
 | region_prefix     | Custom region prefix (auto-derived if null) | `string`      | `null`   |
 | clusters          | Map of Aurora cluster configurations        | `map(object)` | `{}`     |
@@ -413,17 +431,21 @@ Each cluster in the `clusters` map supports 90+ configuration options. Key attri
 | Name                                 | Description                                       | Type           | Default  |
 | ------------------------------------ | ------------------------------------------------- | -------------- | -------- |
 | engine                               | Database engine (aurora-postgresql, aurora-mysql) | `string`       | required |
-| engine_version                       | Engine version                                    | `string`       | required |
+| engine_version                       | Engine version                                    | `string`       | `null`   |
 | database_name                        | Database name                                     | `string`       | `null`   |
 | master_username                      | Master username                                   | `string`       | `null`   |
-| manage_master_user_password          | Use Secrets Manager for passwords                 | `bool`         | `false`  |
-| vpc_security_group_ids               | Security group IDs                                | `list(string)` | required |
-| subnet_ids                           | Subnet IDs for DB subnet group                    | `list(string)` | required |
+| manage_master_user_password          | Use Secrets Manager for passwords                 | `bool`         | `true`   |
+| manage_master_user_password_rotation_automatically | Rotate the RDS-managed secret (needs a schedule) | `bool` | `false` |
+| vpc_security_group_ids               | Security group IDs                                | `list(string)` | `[]`     |
+| subnet_ids                           | Subnet IDs for DB subnet group (empty = use `db_subnet_group_name`) | `list(string)` | `[]` |
 | instances                            | Map of instance configurations                    | `map(object)`  | `{}`     |
-| cluster_scalability_type             | Set to "limitless" for Aurora Limitless           | `string`       | `null`   |
+| cluster_scalability_type             | Set to "limitless" for Aurora Limitless           | `string`       | `"standard"` |
+| shard_group                          | Limitless DB shard group (`enabled`, `max_acu`, `min_acu`, `compute_redundancy`) | `object` | `null` |
 | global_cluster_identifier            | Global cluster ID for multi-region                | `string`       | `null`   |
-| autoscaling_enabled                  | Enable autoscaling                                | `bool`         | `false`  |
-| autoscaling_target_tracking_policies | Target tracking policies                          | `map(object)`  | `{}`     |
+| is_primary_cluster                   | `false` for secondary clusters of a global database | `bool`       | `true`   |
+| cluster_monitoring_interval          | Enhanced Monitoring set on the cluster itself (Multi-AZ, Limitless) | `number` | `null` |
+| autoscaling                          | Read replica autoscaling (`enabled`, capacities, target tracking, step scaling, scheduled actions) | `object` | `null` |
+| skip_final_snapshot                  | Skip the final snapshot on destroy                | `bool`         | `true`   |
 | backup_retention_period              | Backup retention days                             | `number`       | `7`      |
 | deletion_protection                  | Enable deletion protection                        | `bool`         | `true`   |
 | storage_encrypted                    | Enable encryption                                 | `bool`         | `true`   |
@@ -452,10 +474,22 @@ Each instance in the `instances` map supports the following key attributes:
 | deletion_protection          | Enable deletion protection                            | `bool`   | `true`   |
 | storage_encrypted            | Enable encryption                                     | `bool`   | `true`   |
 | performance_insights_enabled | Enable Performance Insights                           | `bool`   | `false`  |
+| skip_final_snapshot          | Skip the final snapshot on destroy                    | `bool`   | `true`   |
+| cloudwatch_log_class         | `STANDARD` or `INFREQUENT_ACCESS`                     | `string` | `"STANDARD"` |
+
+### Deprecated variables
+
+`enable_blue_green_deployments`, `blue_green_update_timeout`, `enable_cross_region_backups`,
+`cross_region_backup_config`, `enable_query_editor`, `enable_encryption_in_transit`,
+`tls_cipher_suites`, `enable_cost_optimization`, `cost_optimization_config`,
+`enable_deletion_protection_override`, `audit_log_retention_days`, `enable_compliance_mode`,
+`enable_experimental_features` and `experimental_config` were never wired to any resource.
+They are kept for backward compatibility, are ignored and will be removed in the next major
+version. Use the per-instance `blue_green_update` block for Blue/Green updates.
 
 ## 📤 Outputs
 
-The module provides 70 outputs organized by resource type:
+The module provides 75 outputs organized by resource type:
 
 ### Cluster Outputs
 
@@ -469,6 +503,8 @@ The module provides 70 outputs organized by resource type:
 | cluster_resource_ids            | Map of cluster resource IDs |
 | cluster_hosted_zone_ids         | Map of hosted zone IDs      |
 | cluster_master_user_secret_arns | Map of Secrets Manager ARNs |
+| cluster_password_rotation_enabled | Map of managed-secret rotation flags |
+| shard_group_arns / shard_group_endpoints / shard_group_resource_ids | Aurora Limitless DB shard group |
 
 ### Global Cluster Outputs
 
@@ -498,7 +534,9 @@ The module provides 70 outputs organized by resource type:
 | db_instance_ports                   | Map of RDS instance ports               |
 | db_instance_resource_ids            | Map of RDS instance resource IDs        |
 | db_instance_status                  | Map of RDS instance statuses            |
-| db_instance_master_user_secret_arns | Map of Secrets Manager ARNs (sensitive) |
+| db_instance_master_user_secret_arns | Map of Secrets Manager ARNs             |
+| db_instance_password_rotation_enabled | Map of managed-secret rotation flags  |
+| db_instance_cloudwatch_log_group_names | Map of instance log group names      |
 | db_instance_database_names          | Map of database names                   |
 | db_option_group_ids                 | Map of option group identifiers         |
 | db_option_group_arns                | Map of option group ARNs                |
@@ -510,7 +548,7 @@ The module provides 70 outputs organized by resource type:
 | autoscaling_target_ids                  | Map of autoscaling target IDs      |
 | autoscaling_target_tracking_policy_arns | Map of target tracking policy ARNs |
 | autoscaling_step_scaling_policy_arns    | Map of step scaling policy ARNs    |
-| autoscaling_scheduled_action_arns       | Map of scheduled action ARNs       |
+| autoscaling_scheduled_action_names      | Map of scheduled action names      |
 
 ### RDS Proxy Outputs
 
@@ -521,7 +559,7 @@ The module provides 70 outputs organized by resource type:
 | db_proxy_endpoints | Map of proxy endpoints   |
 | db_proxy_names     | Map of proxy names       |
 
-See [9-outputs.tf](./rds/9-outputs.tf) for the complete list of 70 outputs.
+See [9-outputs.tf](./rds/9-outputs.tf) for the complete list of 75 outputs.
 
 ## 🔒 Security Best Practices
 
@@ -536,7 +574,7 @@ This module implements AWS security best practices:
 ### Access Control
 
 - **IAM authentication**: Database IAM authentication support
-- **Secrets Manager**: Automatic password rotation
+- **Secrets Manager**: RDS-managed master passwords, optional rotation schedule (`manage_master_user_password_rotation_automatically`)
 - **Security groups**: No default security groups created (bring your own)
 - **Private access**: Public accessibility disabled by default
 
@@ -550,7 +588,7 @@ This module implements AWS security best practices:
 ### Backup & Recovery
 
 - **Automated backups**: Configurable retention (7-35 days)
-- **Final snapshots**: Enabled by default
+- **Final snapshots**: Disabled by default (`skip_final_snapshot = true`); set it to `false` in production. The generated identifier is `<name>-final-<random hex>`, stable across plans
 - **Point-in-time recovery**: Up to backup retention period
 - **Backtrack** (MySQL): Rewind database without restore
 
@@ -558,8 +596,9 @@ This module implements AWS security best practices:
 
 Aurora Limitless enables horizontal scaling beyond single-node Aurora limits:
 
-- **Capacity**: 768 ACU (0.75 TB) to 3,145,728 ACU (3 PB)
-- **Engine**: PostgreSQL 15.5+ only
+- **Shard group**: created with `aws_rds_shard_group` when `shard_group.enabled = true` (identifier `<cluster>-shard`)
+- **Engine**: Aurora PostgreSQL `-limitless` engine versions; managed master passwords are not supported
+- **Cluster-level monitoring**: set `cluster_monitoring_interval` and `cluster_performance_insights_enabled`
 - **Use cases**: > 1M TPS, multi-tenant SaaS, massive analytics
 - **Transparent**: No application code changes required
 
@@ -567,14 +606,13 @@ Aurora Limitless enables horizontal scaling beyond single-node Aurora limits:
 clusters = {
   limitless = {
     engine                   = "aurora-postgresql"
-    engine_version           = "15.5"
+    engine_version           = "16.9-limitless"
     cluster_scalability_type = "limitless"
 
     shard_group = {
       enabled            = true
-      max_acu            = 1536
-      min_acu            = 768
-      compute_redundancy = 2  # High availability
+      max_acu            = 768
+      compute_redundancy = 2 # High availability
     }
   }
 }
@@ -636,20 +674,26 @@ Predictable capacity changes:
 - Weekend scaling
 
 ```hcl
-autoscaling_target_tracking_policies = {
-  cpu = {
-    target_metric      = "RDSReaderAverageCPUUtilization"
-    target_value       = 70
-    scale_in_cooldown  = 300
-    scale_out_cooldown = 60
-  }
-}
+autoscaling = {
+  enabled      = true
+  min_capacity = 1
+  max_capacity = 5
 
-autoscaling_scheduled_actions = {
-  business_hours = {
-    schedule     = "cron(0 8 ? * MON-FRI *)"
-    min_capacity = 3
-    max_capacity = 10
+  target_tracking_policies = {
+    cpu = {
+      target_metric      = "RDSReaderAverageCPUUtilization"
+      target_value       = 70
+      scale_in_cooldown  = 300
+      scale_out_cooldown = 60
+    }
+  }
+
+  scheduled_actions = {
+    business_hours = {
+      schedule     = "cron(0 8 ? * MON-FRI *)"
+      min_capacity = 3
+      max_capacity = 10
+    }
   }
 }
 ```
@@ -688,6 +732,7 @@ db_proxies = {
 | --------- | -------- |
 | terraform | >= 1.3   |
 | aws       | >= 6.0   |
+| random    | >= 3.1   |
 
 ## 🏗️ Architecture Patterns
 
@@ -794,7 +839,7 @@ db_proxies = {
 
 **Issue**: Autoscaling not working
 
-- Verify autoscaling_enabled = true
+- Verify `autoscaling.enabled = true`
 - Check target values and cooldowns
 - Review CloudWatch metrics
 

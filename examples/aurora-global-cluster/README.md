@@ -16,7 +16,7 @@ Aurora Global Database is a feature that spans multiple AWS regions, enabling:
 - ✅ Primary cluster in us-east-1 (writer)
 - ✅ Secondary cluster in us-west-2 (read replica with write forwarding)
 - ✅ Cross-region replication with sub-second latency
-- ✅ AWS Secrets Manager for password management
+- ✅ Explicit master password (Aurora global databases do not support RDS-managed passwords)
 - ✅ Performance Insights enabled on all instances
 - ✅ CloudWatch Logs export for monitoring
 
@@ -120,20 +120,12 @@ terraform apply
 
 ## Connect to the Database
 
-### 1. Retrieve the Password
+### 1. Master Password
 
-Master credentials are stored in Secrets Manager in the **primary region**:
-
-```bash
-# Get the secret ARN from outputs
-SECRET_ARN=$(terraform output -raw primary_master_user_secret_arn)
-
-# Retrieve the password
-aws secretsmanager get-secret-value \
-  --region us-east-1 \
-  --secret-id $SECRET_ARN \
-  --query SecretString --output text | jq -r .password
-```
+Aurora global databases do not support RDS-managed master passwords (Secrets
+Manager), so the example passes the password through the sensitive `db_password`
+variable. Store it in your own secret store and supply it with
+`TF_VAR_db_password` or a git-ignored `terraform.tfvars`.
 
 ### 2. Connect to Primary Cluster (Read/Write)
 

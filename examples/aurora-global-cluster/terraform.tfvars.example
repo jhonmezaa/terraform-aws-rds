@@ -47,6 +47,6 @@ tags = {
 # 3. Security groups must allow PostgreSQL traffic (port 5432)
 # 4. Global cluster replication is asynchronous (RPO ~1 second)
 # 5. Write forwarding allows secondary to forward writes to primary
-# 6. Master credentials are stored in Secrets Manager in PRIMARY region
+# 6. Global databases do not support managed passwords: set db_password (e.g. TF_VAR_db_password)
 # 7. Failover can be initiated from either region
 # =============================================================================

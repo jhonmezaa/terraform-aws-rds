@@ -49,32 +49,26 @@ variable "db_username" {
   default     = "limitless_admin"
 }
 
+variable "db_password" {
+  description = "Master password for the Aurora Limitless cluster (managed passwords are not supported by Limitless)"
+  type        = string
+  sensitive   = true
+}
+
 variable "engine_version" {
-  description = "PostgreSQL engine version (must be 15.5 or higher for Limitless)"
+  description = "Aurora PostgreSQL Limitless engine version (Limitless versions end in -limitless)"
   type        = string
-  default     = "15.5"
-}
-
-variable "instance_class" {
-  description = "Instance class for Aurora instances"
-  type        = string
-  default     = "db.r6g.xlarge"
-}
-
-variable "instance_count" {
-  description = "Number of Aurora instances"
-  type        = number
-  default     = 2
+  default     = "16.9-limitless"
 }
 
 variable "max_acu" {
-  description = "Maximum ACU for shard group (768 to 3145728)"
+  description = "Maximum capacity of the DB shard group in ACUs"
   type        = number
   default     = 1536
 }
 
 variable "min_acu" {
-  description = "Minimum ACU for shard group"
+  description = "Minimum capacity of the DB shard group in ACUs"
   type        = number
   default     = 768
 }

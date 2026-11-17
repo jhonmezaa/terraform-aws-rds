@@ -46,12 +46,6 @@ output "primary_cluster_port" {
   value       = module.aurora_primary.cluster_ports["primary"]
 }
 
-output "primary_master_user_secret_arn" {
-  description = "ARN of Secrets Manager secret for primary cluster credentials"
-  value       = module.aurora_primary.cluster_master_user_secret_arns["primary"]
-  sensitive   = true
-}
-
 output "primary_instance_ids" {
   description = "Map of primary cluster instance identifiers"
   value       = module.aurora_primary.cluster_instance_ids
@@ -138,12 +132,8 @@ output "connection_info" {
   HOW TO CONNECT:
   --------------------
 
-  1. Retrieve master password from Secrets Manager:
-
-     aws secretsmanager get-secret-value \
-       --region ${var.primary_region} \
-       --secret-id ${module.aurora_primary.cluster_master_user_secret_arns["primary"]} \
-       --query SecretString --output text | jq -r .password
+  1. Use the master password passed in var.db_password
+     (global databases do not support RDS-managed passwords).
 
   2. Connect to PRIMARY cluster (read/write):
 
