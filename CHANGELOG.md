@@ -5,6 +5,63 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.1.0] - 2026-11-17
+
+Audit against the official `terraform-aws-modules/rds` (v7.2.2) and `terraform-aws-modules/rds-aurora` modules.
+
+### Added
+
+- `aws_rds_shard_group` for Aurora Limitless clusters (`shard_group.enabled = true`), identifier `<cluster>-<shard_identifier_suffix|shard>`, with `tags` and `timeouts`; outputs `shard_group_arns`, `shard_group_endpoints`, `shard_group_resource_ids`
+- `aws_secretsmanager_secret_rotation` for RDS-managed master passwords of clusters and instances: `manage_master_user_password_rotation_automatically`, `master_user_password_rotation_schedule_days` / `_schedule_expression` / `_duration` (cluster attributes existed but were ignored) and new `master_user_password_rotate_immediately`; output `db_instance_password_rotation_enabled`
+- Cluster attributes: `cluster_monitoring_interval`, `cluster_performance_insights_enabled`, `cluster_performance_insights_kms_key_id`, `cluster_performance_insights_retention_period`, `database_insights_mode`, `db_cluster_instance_class` (Multi-AZ DB clusters), `delete_automated_backups`, `restore_to_point_in_time.source_cluster_resource_id`, `scaling_configuration.seconds_before_timeout`, `serverlessv2_scaling_configuration.seconds_until_auto_pause`
+- Instance attributes: `engine_lifecycle_support`, `timezone`, `dedicated_log_volume`, `database_insights_mode`, `cloudwatch_log_class`; `backup_target` (declared but ignored) is now applied
+- RDS Proxy: `kms:Decrypt` (via Secrets Manager) on the customer managed key of an RDS-managed secret
+- Outputs `db_instance_monitoring_role_arns`, `db_instance_cloudwatch_log_group_names`
+- Validations (Spanish messages): `account_name` / `project_name` (1-32 chars, `^[a-z0-9-]+$`), rotation schedule required, `shard_group` only with `limitless`, `self:<key>` replicas must reference an existing instance, instance `cloudwatch_log_class`
+- Regions in `region_prefix_map` (eu-west-2/3, eu-central-2, eu-north-1, eu-south-1/2, ap-southeast-2..7, ap-northeast-2/3, ap-south-1/2, ap-east-1/2, sa-east-1, mx-central-1, ca-central-1, ca-west-1, me-south-1, me-central-1, af-south-1, il-central-1)
+- `hashicorp/random >= 3.1` provider requirement (final snapshot suffix)
+- READMEs for the `rds-mysql` and `rds-postgresql` examples
+
+### Fixed
+
+- `shard_group` was silently ignored: Limitless clusters were created without a shard group. Limitless clusters now send an empty `engine_mode`, as the API requires
+- Clusters with `manage_master_user_password = false` and `master_password` failed at plan (`"master_password": conflicts with manage_master_user_password`): `manage_master_user_password` is now only sent when `true`
+- `is_primary_cluster` was ignored: secondary clusters no longer send `database_name`, `master_username` or credentials
+- Final snapshot identifiers used `timestamp()`, producing a perpetual diff on every plan; the default is now `<name>-final-<random hex>` from a stable `random_id`. Read replicas no longer get a final snapshot identifier (not allowed by AWS)
+- Enhanced Monitoring on an Aurora instance with the cluster `monitoring_interval = 0` (or with a cluster `monitoring_role_arn`) produced an instance without a role: the cluster role is now created/propagated
+- Clusters with `create_subnet_group = true` (default) and empty `subnet_ids` failed with an invalid index; `db_subnet_group_name` is used instead
+- The instance log group ignored a custom `identifier` (RDS writes to `/aws/rds/instance/<identifier>/...`)
+- Cluster log groups are no longer created with a wrong name when `cluster_identifier_prefix` is used
+- `cloudwatch_log_class` was only a tag: it is now applied as `log_group_class`
+- `create = false` with `db_proxies` failed (local referenced `aws_iam_role.rds_proxy[...]`)
+- `aws_rds_global_cluster` had no tags (`global_cluster_tags` was unused)
+- `cluster_password_rotation_*` outputs read nonexistent attributes and were always `false`/`null`
+- Limitless validation used `can()` and never failed; `shard_group.max_acu` lower bound of 768 rejected valid values (now `> 0` and `>= min_acu`); `min_acu` no longer defaults to 768
+- `cluster_master_user_secret_arns` / `db_instance_master_user_secret_arns` were marked sensitive, which made the `aurora-autoscaling-advanced`, `aurora-global-cluster`, `aurora-limitless`, `aurora-mysql-advanced` and `aurora-postgresql-advanced` examples fail at plan (`Output refers to sensitive values`). They are ARNs, not secrets
+- Generated identifiers are truncated to AWS limits (63 for clusters, instances, endpoints and shard groups, 60 for proxies, 64 for IAM roles) without a trailing hyphen; only names that AWS would have rejected change
+- Examples: `aurora-mysql-advanced` / `aurora-postgresql-advanced` used `final_snapshot_identifier` on clusters (silently dropped) instead of `final_snapshot_identifier_prefix`; `aurora-global-cluster` and `aurora-limitless` used managed passwords (unsupported there) and now take `db_password`; `aurora-limitless` no longer creates DB instances and enables cluster-level monitoring
+- README: `source` uses `github.com/jhonmezaa/terraform-aws-rds//rds?ref=v3.1.0`; autoscaling syntax, defaults (`manage_master_user_password`, `subnet_ids`, `cluster_scalability_type`, `skip_final_snapshot`), output names and counts, Limitless section and requirements now match the code
+
+### Changed
+
+- Every resource gets the `ManagedBy = "Terraform"` tag; the `Name` tag of standard instances is the real identifier (custom `identifier` included) and the global cluster `Name` is its `global_cluster_identifier`
+- Validation messages are in Spanish
+
+### Deprecated
+
+- Top-level variables that were never wired to any resource: `enable_blue_green_deployments`, `blue_green_update_timeout`, `enable_cross_region_backups`, `cross_region_backup_config`, `enable_query_editor`, `enable_encryption_in_transit`, `tls_cipher_suites`, `enable_cost_optimization`, `cost_optimization_config`, `enable_deletion_protection_override`, `audit_log_retention_days`, `enable_compliance_mode`, `enable_experimental_features`, `experimental_config`
+- Ignored object attributes: `shard_group.max_allocated_storage` / `min_allocated_storage`, cluster `instances[*].network_type`, `autoscaling.predictive_scaling_enabled`, `autoscaling.scheduled_actions[*].recurrence_pattern`
+
+### Upgrade notes
+
+- Run `terraform init -upgrade`: the module now requires the `hashicorp/random` provider.
+- No cluster or instance is recreated. Expected in-place changes on the first plan: tags (`ManagedBy`, `Name` of instances with a custom `identifier`), `final_snapshot_identifier` (new `random_id` suffix) on resources with `skip_final_snapshot = false` and no explicit identifier, and the global cluster tags.
+- Instances with a custom `identifier` and log exports: the module log group is renamed to `/aws/rds/instance/<identifier>/<log>` (destroy + create of the log group). If RDS already created that log group, import it first: `terraform import 'module.<name>.aws_cloudwatch_log_group.instances["<key>-<log>"]' /aws/rds/instance/<identifier>/<log>`.
+- Clusters using `cluster_identifier_prefix`: the module no longer manages their (wrongly named) log groups; they are destroyed.
+- Log groups with `cloudwatch_log_class = "INFREQUENT_ACCESS"` are replaced (the class can only be set at creation).
+- Limitless clusters created with a previous version (without a shard group) get `engine_mode = ""`, which forces replacement if AWS stored `provisioned`; review the plan before applying.
+- Global and Limitless clusters must use `manage_master_user_password = false` with `master_password`.
+
 ## [v3.0.7] - 2026-10-27
 
 ### Changed
